@@ -78,23 +78,10 @@ code --install-extension .\fanqie-reader-v0.5.4.vsix
 
 ## 已知限制
 
-- 本扩展依赖番茄网页和非公开接口；网页结构或接口变化可能导致功能失效。
+- 网页结构或接口变化可能导致功能失效。
 - 密码输入和交互式风控必须在番茄官方窗口中完成。
 - 首个公开版本不把进度同步回番茄账号。
 - 请遵守番茄小说服务条款和内容版权要求，不要用于批量抓取或内容再分发。
-
-## 本地开发
-
-```powershell
-npm ci
-npm run verify
-```
-
-在 VS Code 中打开本目录，按 `F5` 启动 Extension Development Host。生成 VSIX：
-
-```powershell
-npm run package
-```
 
 ## 许可证
 
