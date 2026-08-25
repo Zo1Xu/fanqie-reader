@@ -1,8 +1,6 @@
 # fanqieReader
 
-一个非官方的 VS Code 番茄小说阅读扩展：在侧边栏浏览书架，在底部 Panel 中以终端风格阅读章节。
-
-> 本项目与北京时光荏苒科技有限公司、番茄小说及其关联公司无隶属、授权或背书关系。“番茄小说”等名称和标识归其权利人所有。
+一个VS Code 番茄小说阅读插件：在侧边栏浏览书架，在底部 Panel 中以终端风格阅读章节。
 
 ## 主要功能
 
@@ -14,45 +12,6 @@
 - 不绕过付费、锁定章节或账号权限。
 
 扩展的完整使用说明见 [vscode-fanqie-reader/README.md](vscode-fanqie-reader/README.md)。
-
-## 仓库结构
-
-```text
-fanqieReader/
-├─ vscode-fanqie-reader/   # VS Code 扩展源码、测试和打包配置
-├─ fanqie-api-capture/     # 本地接口研究工具
-└─ PUBLISHING.md           # GitHub 与 Marketplace 发布手册
-```
-
-`fanqie-api-capture/output/` 中的 HAR、请求记录和响应样本可能包含有效 Cookie、Session、CSRF Token、用户 ID 与阅读数据，因此已被根目录 `.gitignore` 排除，绝不能提交到公开仓库。公开源码不依赖这些本地输出文件运行。
-
-## 本地开发
-
-```powershell
-cd vscode-fanqie-reader
-npm ci
-npm run verify
-```
-
-在 VS Code 中打开 `vscode-fanqie-reader`，按 `F5` 启动 Extension Development Host。
-
-生成本地安装包：
-
-```powershell
-npm run package
-```
-
-## 发布
-
-本仓库已经包含：
-
-- GitHub Actions 持续集成与标签发布工作流；
-- GitHub Issue / Pull Request 模板；
-- 发布前元数据检查脚本；
-- AGPL-3.0-only 许可证、隐私说明、安全策略、贡献指南和变更记录；
-- GitHub Release 与 VS Code Marketplace 的逐步发布说明。
-
-请先阅读 [PUBLISHING.md](PUBLISHING.md)，替换仓库所有者和 Marketplace Publisher ID 后再首次发布。
 
 ## 隐私与安全
 
