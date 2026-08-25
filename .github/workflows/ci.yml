@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode-fanqie-reader
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vscode-fanqie-reader/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check and test
+        run: npm run verify
+
+      - name: Build CI VSIX
+        run: npm run package -- --out fanqie-reader-ci.vsix
+
+      - name: Upload CI VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: fanqie-reader-ci
+          path: vscode-fanqie-reader/fanqie-reader-ci.vsix
+          if-no-files-found: error
+          retention-days: 7
+

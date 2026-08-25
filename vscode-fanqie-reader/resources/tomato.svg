@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <title>番茄</title>
+  <defs>
+    <mask id="leaf-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect width="24" height="24" fill="white"/>
+      <path fill="black" stroke="black" stroke-width="1.1" stroke-linejoin="round" d="M10.5 4.8C8.9 2.7 6.9 1.5 4.5.7c.1 2.4.7 4.4 1.8 5.9C4.1 6.3 2.2 7 .7 8.6c2.5.8 4.7.7 6.4.2-.7 1.8-.9 3.6-.5 5.3 1.8-1 3.1-2.3 3.8-3.9.7 2.2 1.9 4 3.7 5.2.4-2.5 0-4.7-1-6.4 2.4.6 4.6.3 6.5-1-1.6-1.7-3.6-2.5-5.8-2.3C15.2 4 15.7 2.1 15.5 0c-2.2 1.1-3.9 2.7-5 4.8Z"/>
+    </mask>
+  </defs>
+  <circle cx="13" cy="14" r="8.6" fill="currentColor" mask="url(#leaf-cut)"/>
+  <path fill="currentColor" d="M10.5 4.8C8.9 2.7 6.9 1.5 4.5.7c.1 2.4.7 4.4 1.8 5.9C4.1 6.3 2.2 7 .7 8.6c2.5.8 4.7.7 6.4.2-.7 1.8-.9 3.6-.5 5.3 1.8-1 3.1-2.3 3.8-3.9.7 2.2 1.9 4 3.7 5.2.4-2.5 0-4.7-1-6.4 2.4.6 4.6.3 6.5-1-1.6-1.7-3.6-2.5-5.8-2.3C15.2 4 15.7 2.1 15.5 0c-2.2 1.1-3.9 2.7-5 4.8Z"/>
+</svg>

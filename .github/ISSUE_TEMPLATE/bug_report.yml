@@ -1,0 +1,73 @@
+name: Bug report
+description: 报告可复现的扩展问题
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先升级到最新版本。不要粘贴 Cookie、Token、手机号、验证码、完整 HAR 或个人书架响应。
+
+  - type: input
+    id: version
+    attributes:
+      label: 扩展版本
+      placeholder: 例如 0.5.4
+    validations:
+      required: true
+
+  - type: input
+    id: vscode
+    attributes:
+      label: VS Code 与操作系统版本
+      placeholder: 例如 VS Code 1.96.0 / Windows 11
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题区域
+      options:
+        - 公开书籍/章节
+        - 扫码登录
+        - 验证码登录
+        - 官方窗口登录
+        - 书架/目录
+        - 底部阅读器
+        - 安装/更新
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 使用虚构书籍或已脱敏数据描述。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为与已脱敏日志
+      description: 上传前删除 Cookie、Token、手机号、验证码、个人路径和书架内容。
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 隐私确认
+      options:
+        - label: 我已确认内容中没有 Cookie、Token、手机号、验证码、完整 HAR 或其他个人数据。
+          required: true
+

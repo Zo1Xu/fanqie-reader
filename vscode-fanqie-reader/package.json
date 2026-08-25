@@ -1,0 +1,222 @@
+{
+  "name": "fanqie-reader",
+  "displayName": "番茄阅读",
+  "description": "在 VS Code 侧边栏中浏览番茄小说书架，并在底部 Panel 阅读章节。",
+  "version": "0.5.4",
+  "publisher": "Zo1Xu",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "icon": "resources/icon.png",
+  "pricing": "Free",
+  "galleryBanner": {
+    "color": "#181818",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zo1Xu/fanqie-reader.git",
+    "directory": "vscode-fanqie-reader"
+  },
+  "homepage": "https://github.com/Zo1Xu/fanqie-reader/tree/main/vscode-fanqie-reader#readme",
+  "bugs": {
+    "url": "https://github.com/Zo1Xu/fanqie-reader/issues"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "番茄小说",
+    "阅读",
+    "小说",
+    "reader"
+  ],
+  "activationEvents": [
+    "onView:fanqieReader.shelf",
+    "onView:fanqieReader.loginView",
+    "onView:fanqieReader.readerView",
+    "onCommand:fanqieReader.open",
+    "onCommand:fanqieReader.openChapter",
+    "onCommand:fanqieReader.continueBook",
+    "onCommand:fanqieReader.showReader",
+    "onCommand:fanqieReader.previousChapter",
+    "onCommand:fanqieReader.nextChapter",
+    "onCommand:fanqieReader.login",
+    "onCommand:fanqieReader.loginInBrowser",
+    "onCommand:fanqieReader.setCookie",
+    "onCommand:fanqieReader.clearCookie",
+    "onCommand:fanqieReader.refresh"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "fanqieReader.open",
+        "title": "番茄阅读：打开书籍或章节",
+        "icon": "$(book)"
+      },
+      {
+        "command": "fanqieReader.continueBook",
+        "title": "番茄阅读：继续阅读",
+        "icon": "$(play)"
+      },
+      {
+        "command": "fanqieReader.showReader",
+        "title": "番茄阅读：显示底部阅读区",
+        "icon": "$(book)"
+      },
+      {
+        "command": "fanqieReader.previousChapter",
+        "title": "番茄阅读：上一章"
+      },
+      {
+        "command": "fanqieReader.nextChapter",
+        "title": "番茄阅读：下一章"
+      },
+      {
+        "command": "fanqieReader.login",
+        "title": "番茄阅读：侧边栏登录（扫码 / 验证码）",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "fanqieReader.loginInBrowser",
+        "title": "番茄阅读：在官方小窗口中登录"
+      },
+      {
+        "command": "fanqieReader.setCookie",
+        "title": "番茄阅读：手动导入 Cookie（高级）"
+      },
+      {
+        "command": "fanqieReader.clearCookie",
+        "title": "番茄阅读：退出登录",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "fanqieReader.refresh",
+        "title": "番茄阅读：刷新书架",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "fanqieReaderSidebar",
+          "title": "番茄阅读",
+          "icon": "resources/tomato.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "fanqieReaderPanel",
+          "title": "fanqieReader",
+          "icon": "resources/tomato.svg"
+        }
+      ]
+    },
+    "views": {
+      "fanqieReaderSidebar": [
+        {
+          "id": "fanqieReader.loginView",
+          "name": "账号登录",
+          "type": "webview",
+          "when": "!fanqieReader.loggedIn"
+        },
+        {
+          "id": "fanqieReader.shelf",
+          "name": "我的书架"
+        }
+      ],
+      "fanqieReaderPanel": [
+        {
+          "id": "fanqieReader.readerView",
+          "name": "小说阅读",
+          "type": "webview",
+          "icon": "resources/tomato.svg",
+          "contextualTitle": "fanqieReader"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "fanqieReader.previousChapter",
+        "key": "alt+pageup",
+        "when": "fanqieReader.readerVisible"
+      },
+      {
+        "command": "fanqieReader.nextChapter",
+        "key": "alt+pagedown",
+        "when": "fanqieReader.readerVisible"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "fanqieReader.open",
+          "when": "view == fanqieReader.shelf",
+          "group": "navigation@1"
+        },
+        {
+          "command": "fanqieReader.refresh",
+          "when": "view == fanqieReader.shelf",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "fanqieReader.continueBook",
+          "when": "view == fanqieReader.shelf && viewItem == fanqieBook",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "番茄阅读",
+      "properties": {
+        "fanqieReader.fontSize": {
+          "type": "number",
+          "default": 14,
+          "minimum": 12,
+          "maximum": 36,
+          "description": "终端阅读区的默认字号（像素）。"
+        },
+        "fanqieReader.lineHeight": {
+          "type": "number",
+          "default": 1.6,
+          "minimum": 1.4,
+          "maximum": 3,
+          "description": "终端阅读区的默认行高。"
+        },
+        "fanqieReader.contentWidth": {
+          "type": "number",
+          "default": 760,
+          "minimum": 480,
+          "maximum": 1200,
+          "description": "阅读区域的最大宽度（像素）。"
+        },
+        "fanqieReader.browserPath": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "可选：用于官方登录窗口的 Chrome、Edge 或 Chromium 可执行文件路径。留空时自动检测。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/extension.js && node --check src/fanqieClient.js && node --check src/loginView.js && node --check src/officialLogin.js && node --check src/readerPanel.js",
+    "verify": "npm run check && npm test",
+    "vscode:prepublish": "npm run verify",
+    "package": "vsce package",
+    "release:check": "node scripts/release-check.js",
+    "package:release": "npm run release:check && vsce package"
+  },
+  "dependencies": {
+    "playwright-core": "^1.62.1"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.2"
+  }
+}

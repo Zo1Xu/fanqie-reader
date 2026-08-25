@@ -1,0 +1,28 @@
+name: Feature request
+description: 建议符合项目边界的新功能
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景
+      description: 这个功能解决什么问题？
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 项目边界
+      options:
+        - label: 该建议不涉及验证码/风控破解、权限绕过、批量抓取或小说正文再分发。
+          required: true
+

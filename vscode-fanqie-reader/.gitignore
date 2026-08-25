@@ -1,0 +1,7 @@
+node_modules/
+*.vsix
+npm-debug.log*
+*-login-page.png
+*-preview.png
+.env
+.env.*
