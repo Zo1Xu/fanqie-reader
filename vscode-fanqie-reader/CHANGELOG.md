@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- 修复 macOS 无法发现 `~/Applications` 中的浏览器，以及配置 `.app` 路径后无法登录的问题。
 - 准备首次 GitHub 与 VS Code Marketplace 公开发布。
 - 将扩展许可证统一为 `AGPL-3.0-only`。
 

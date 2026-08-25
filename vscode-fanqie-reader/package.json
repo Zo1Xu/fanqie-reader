@@ -199,7 +199,7 @@
           "type": "string",
           "default": "",
           "scope": "application",
-          "description": "可选：用于官方登录窗口的 Chrome、Edge 或 Chromium 可执行文件路径。留空时自动检测。"
+          "description": "可选：用于官方登录窗口的 Chrome、Edge 或 Chromium 路径。macOS 可填写 .app 应用路径；留空时自动检测。"
         }
       }
     }

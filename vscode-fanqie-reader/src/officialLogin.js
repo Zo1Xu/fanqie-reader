@@ -760,7 +760,7 @@ function findBrowserExecutable(options = {}) {
   const preferredPath = String(
     options.preferredPath || env.FANQIE_READER_BROWSER || env.CHROME_PATH || '',
   ).trim();
-  const candidates = preferredPath ? [preferredPath] : [];
+  const candidates = getPreferredBrowserCandidates(preferredPath, platform, env);
 
   if (platform === 'win32') {
     const joinWindowsPath = path.win32.join;
@@ -773,11 +773,28 @@ function findBrowserExecutable(options = {}) {
       );
     }
   } else if (platform === 'darwin') {
-    candidates.push(
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-      '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    );
+    const applicationRoots = ['/Applications'];
+    if (env.HOME) {
+      applicationRoots.push(path.posix.join(env.HOME, 'Applications'));
+    }
+    const browserAppNames = [
+      'Google Chrome',
+      'Google Chrome Beta',
+      'Google Chrome Dev',
+      'Google Chrome Canary',
+      'Microsoft Edge',
+      'Microsoft Edge Beta',
+      'Microsoft Edge Dev',
+      'Microsoft Edge Canary',
+      'Chromium',
+    ];
+    for (const root of applicationRoots) {
+      for (const appName of browserAppNames) {
+        candidates.push(
+          path.posix.join(root, `${appName}.app`, 'Contents', 'MacOS', appName),
+        );
+      }
+    }
   } else {
     candidates.push(
       '/usr/bin/google-chrome',
@@ -789,6 +806,22 @@ function findBrowserExecutable(options = {}) {
     );
   }
   return [...new Set(candidates)].find((candidate) => candidate && existsSync(candidate));
+}
+
+function getPreferredBrowserCandidates(preferredPath, platform, env) {
+  if (!preferredPath) return [];
+  if (platform !== 'darwin') return [preferredPath];
+
+  let normalizedPath = preferredPath;
+  if (env.HOME && (normalizedPath === '~' || normalizedPath.startsWith('~/'))) {
+    normalizedPath = path.posix.join(env.HOME, normalizedPath.slice(2));
+  }
+
+  normalizedPath = normalizedPath.replace(/\/+$/, '');
+  if (!normalizedPath.toLowerCase().endsWith('.app')) return [normalizedPath];
+
+  const appName = path.posix.basename(normalizedPath, '.app');
+  return [path.posix.join(normalizedPath, 'Contents', 'MacOS', appName)];
 }
 
 function delay(milliseconds) {

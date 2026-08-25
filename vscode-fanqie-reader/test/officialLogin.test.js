@@ -88,6 +88,38 @@ test('findBrowserExecutable detects Chrome in Applications on macOS', () => {
   assert.equal(result, expected);
 });
 
+test('findBrowserExecutable detects a per-user Chrome installation on macOS', () => {
+  const expected = '/Users/demo/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const result = findBrowserExecutable({
+    platform: 'darwin',
+    env: { HOME: '/Users/demo' },
+    existsSync: (candidate) => candidate === expected,
+  });
+  assert.equal(result, expected);
+});
+
+test('findBrowserExecutable accepts a macOS app bundle as the configured path', () => {
+  const expected = '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge';
+  const result = findBrowserExecutable({
+    preferredPath: '/Applications/Microsoft Edge.app',
+    platform: 'darwin',
+    env: {},
+    existsSync: (candidate) => candidate === expected,
+  });
+  assert.equal(result, expected);
+});
+
+test('findBrowserExecutable expands a configured home-relative path on macOS', () => {
+  const expected = '/Users/demo/Applications/Chromium.app/Contents/MacOS/Chromium';
+  const result = findBrowserExecutable({
+    preferredPath: '~/Applications/Chromium.app',
+    platform: 'darwin',
+    env: { HOME: '/Users/demo' },
+    existsSync: (candidate) => candidate === expected,
+  });
+  assert.equal(result, expected);
+});
+
 test('phone login validates and masks ephemeral credentials', () => {
   assert.equal(normalizePhone('+86 138-1234-5678'), '13812345678');
   assert.equal(isValidPhone('13812345678'), true);

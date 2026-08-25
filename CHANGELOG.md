@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修复 macOS 无法发现 `~/Applications` 中的浏览器，以及配置 `.app` 路径后无法登录的问题。
+
 ### Added
 
 - GitHub 发布准备、隐私与安全文档、CI 和发布前检查。

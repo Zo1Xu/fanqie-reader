@@ -42,7 +42,7 @@ code --install-extension .\fanqie-reader-v0.5.4.vsix
 4. 选择书籍和章节后，底部 `fanqieReader` Panel 会自动打开。
 5. 使用目录、悬浮控制区或快捷键切换章节。
 
-扫码和侧边栏登录需要本机安装 Chrome、Edge 或 Chromium。若浏览器位于自定义路径，请设置 `fanqieReader.browserPath`。
+扫码和侧边栏登录需要本机安装 Chrome、Edge 或 Chromium。若浏览器位于自定义路径，请设置 `fanqieReader.browserPath`；macOS 可直接填写 `/Applications` 或 `~/Applications` 下的 `.app` 路径。
 
 ## 登录与数据
 
@@ -63,7 +63,7 @@ code --install-extension .\fanqie-reader-v0.5.4.vsix
 | `fanqieReader.fontSize` | `14` | 阅读区字号（像素） |
 | `fanqieReader.lineHeight` | `1.6` | 阅读区行高 |
 | `fanqieReader.contentWidth` | `760` | 正文最大宽度（像素） |
-| `fanqieReader.browserPath` | 空 | Chrome、Edge 或 Chromium 可执行文件路径 |
+| `fanqieReader.browserPath` | 空 | Chrome、Edge 或 Chromium 路径；macOS 支持 `.app` 路径 |
 
 ## 常用命令
 
