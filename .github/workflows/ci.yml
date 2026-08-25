@@ -36,7 +36,7 @@ jobs:
         run: npm run package -- --out fanqie-reader-ci.vsix
 
       - name: Upload CI VSIX
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fanqie-reader-ci
           path: vscode-fanqie-reader/fanqie-reader-ci.vsix
