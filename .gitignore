@@ -31,3 +31,5 @@ fanqie-api-capture/output/*
 *.tmp
 *.log
 
+
+fanqie-api-capture/

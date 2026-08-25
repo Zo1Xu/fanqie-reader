@@ -78,6 +78,16 @@ test('findBrowserExecutable detects Chrome under LOCALAPPDATA on Windows', () =>
   assert.equal(result, expected);
 });
 
+test('findBrowserExecutable detects Chrome in Applications on macOS', () => {
+  const expected = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const result = findBrowserExecutable({
+    platform: 'darwin',
+    env: {},
+    existsSync: (candidate) => candidate === expected,
+  });
+  assert.equal(result, expected);
+});
+
 test('phone login validates and masks ephemeral credentials', () => {
   assert.equal(normalizePhone('+86 138-1234-5678'), '13812345678');
   assert.equal(isValidPhone('13812345678'), true);

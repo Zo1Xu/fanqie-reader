@@ -763,12 +763,13 @@ function findBrowserExecutable(options = {}) {
   const candidates = preferredPath ? [preferredPath] : [];
 
   if (platform === 'win32') {
+    const joinWindowsPath = path.win32.join;
     for (const root of [env.LOCALAPPDATA, env.PROGRAMFILES, env['PROGRAMFILES(X86)']]) {
       if (!root) continue;
       candidates.push(
-        path.join(root, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-        path.join(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-        path.join(root, 'Chromium', 'Application', 'chrome.exe'),
+        joinWindowsPath(root, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        joinWindowsPath(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        joinWindowsPath(root, 'Chromium', 'Application', 'chrome.exe'),
       );
     }
   } else if (platform === 'darwin') {
