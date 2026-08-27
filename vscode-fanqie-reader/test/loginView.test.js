@@ -63,3 +63,22 @@ test('logged-out shelf does not duplicate the visible account login view', () =>
     /登录番茄小说（验证码 \/ App 扫码）/,
   );
 });
+
+test('reader and shelf actions use distinct product icons', () => {
+  const manifest = require('../package.json');
+  const icons = new Map(
+    manifest.contributes.commands.map((command) => [command.command, command.icon]),
+  );
+  assert.equal(icons.get('fanqieReader.open'), '$(book)');
+  assert.equal(icons.get('fanqieReader.showReader'), '$(preview)');
+  assert.equal(icons.get('fanqieReader.refresh'), '$(sync)');
+
+  const shelfTitleActions = manifest.contributes.menus['view/title']
+    .filter((item) => item.when === 'view == fanqieReader.shelf')
+    .map((item) => item.command);
+  assert.deepEqual(shelfTitleActions, [
+    'fanqieReader.open',
+    'fanqieReader.refresh',
+  ]);
+  assert.equal(new Set(shelfTitleActions).size, shelfTitleActions.length);
+});

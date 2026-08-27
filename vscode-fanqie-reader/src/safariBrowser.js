@@ -143,6 +143,11 @@ class SafariPage {
     await this.driver.executeScript(() => window.focus()).catch(() => {});
   }
 
+  async evaluate(callback, argument) {
+    const args = argument === undefined ? [] : [argument];
+    return this.driver.executeScript(callback, ...args);
+  }
+
   isClosed() {
     return !this.browser.isConnected();
   }

@@ -2,9 +2,7 @@
 
 const BASE_URL = 'https://fanqienovel.com';
 const COOKIE_SECRET_KEY = 'fanqieReader.cookie';
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-  'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const USER_AGENT_SECRET_KEY = 'fanqieReader.userAgent';
 
 class FanqieError extends Error {
   constructor(message, code) {
@@ -25,18 +23,27 @@ class FanqieClient {
     return Boolean(await this.secretStorage.get(COOKIE_SECRET_KEY));
   }
 
-  async saveCookie(value) {
+  async saveCookie(value, options = {}) {
     const cookie = normalizeCookie(value);
     if (!cookie) {
       throw new FanqieError('Cookie 不能为空。', 'EMPTY_COOKIE');
     }
-    const user = await this.validateCookie(cookie);
+    const userAgent = normalizeUserAgent(options.userAgent) || getDefaultUserAgent();
+    const session = { cookie, userAgent };
+    const user = await this.validateCookie(cookie, { userAgent });
+    // The user endpoint accepts partially established login sessions. Verify the
+    // bookshelf endpoint as well before persisting the isolated browser session.
+    await this.#getShelfBookIds(session);
+    await this.secretStorage.store(USER_AGENT_SECRET_KEY, userAgent);
     await this.secretStorage.store(COOKIE_SECRET_KEY, cookie);
     return user;
   }
 
   async clearCookie() {
-    await this.secretStorage.delete(COOKIE_SECRET_KEY);
+    await Promise.all([
+      this.secretStorage.delete(COOKIE_SECRET_KEY),
+      this.secretStorage.delete(USER_AGENT_SECRET_KEY),
+    ]);
   }
 
   clearCache() {
@@ -44,12 +51,16 @@ class FanqieClient {
   }
 
   async getUser() {
-    const cookie = await this.#requireCookie();
-    return this.validateCookie(cookie);
+    const session = await this.#requireSession();
+    return this.validateCookie(session.cookie, { userAgent: session.userAgent });
   }
 
-  async validateCookie(cookie) {
-    const result = await this.#getJson('/api/user/info/v2', { cookie });
+  async validateCookie(cookie, options = {}) {
+    const result = await this.#getJson('/api/user/info/v2', {
+      cookie,
+      userAgent: options.userAgent,
+      accept: 'application/json, text/plain, */*',
+    });
     assertApiSuccess(result, 'Cookie 已失效或账号未登录');
     if (!result.data?.id) {
       throw new FanqieError('Cookie 已失效或账号未登录。', 'NOT_LOGGED_IN');
@@ -58,16 +69,22 @@ class FanqieClient {
   }
 
   async getShelfBookIds() {
-    const cookie = await this.#requireCookie();
+    const session = await this.#requireSession();
+    return this.#getShelfBookIds(session);
+  }
+
+  async #getShelfBookIds(session) {
     const path =
       '/reading/bookapi/bookshelf/info/v:version/' +
       '?aid=1967&iid=0&version_code=57700&update_version_code=57700';
-    const result = await this.#getJson(path, { cookie });
+    const result = await this.#getJson(path, {
+      cookie: session.cookie,
+      userAgent: session.userAgent,
+      accept: 'application/json, text/plain, */*',
+      referer: `${BASE_URL}/bookshelf`,
+    });
     assertApiSuccess(result, '读取书架失败');
-    const rows = result.data?.book_shelf_info;
-    return Array.isArray(rows)
-      ? [...new Set(rows.map((row) => String(row.book_id || '')).filter(Boolean))]
-      : [];
+    return parseShelfBookIds(result);
   }
 
   async getBook(bookId, options = {}) {
@@ -146,12 +163,16 @@ class FanqieClient {
     };
   }
 
-  async #requireCookie() {
+  async #requireSession() {
     const cookie = await this.secretStorage.get(COOKIE_SECRET_KEY);
     if (!cookie) {
       throw new FanqieError('请先设置番茄小说登录 Cookie。', 'COOKIE_REQUIRED');
     }
-    return cookie;
+    const storedUserAgent = await this.secretStorage.get(USER_AGENT_SECRET_KEY);
+    return {
+      cookie,
+      userAgent: normalizeUserAgent(storedUserAgent) || getDefaultUserAgent(),
+    };
   }
 
   async #getJson(path, options = {}) {
@@ -167,8 +188,9 @@ class FanqieClient {
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
     const headers = {
       Accept: options.accept || 'text/html,application/xhtml+xml,application/json',
-      Referer: `${BASE_URL}/`,
-      'User-Agent': USER_AGENT,
+      'Accept-Language': 'zh-CN,zh;q=0.9',
+      Referer: options.referer || `${BASE_URL}/`,
+      'User-Agent': normalizeUserAgent(options.userAgent) || getDefaultUserAgent(),
     };
     if (options.cookie) {
       headers.Cookie = options.cookie;
@@ -189,6 +211,7 @@ class FanqieClient {
           `HTTP_${response.status}`,
         );
       }
+      // fetch transparently decodes gzip/deflate/Brotli responses before text().
       return await response.text();
     } catch (error) {
       if (error instanceof FanqieError) {
@@ -211,7 +234,7 @@ class FanqieClient {
     const timeout = setTimeout(() => controller.abort(), 20_000);
     try {
       const response = await fetch(url, {
-        headers: { Referer: `${BASE_URL}/`, 'User-Agent': USER_AGENT },
+        headers: { Referer: `${BASE_URL}/`, 'User-Agent': getDefaultUserAgent() },
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -235,6 +258,32 @@ function normalizeCookie(value) {
     .trim()
     .replace(/^cookie\s*:\s*/i, '')
     .replace(/[\r\n]+/g, '');
+}
+
+function normalizeUserAgent(value) {
+  return String(value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, 512);
+}
+
+function getDefaultUserAgent(platform = process.platform) {
+  const system = platform === 'darwin'
+    ? 'Macintosh; Intel Mac OS X 10_15_7'
+    : platform === 'win32'
+      ? 'Windows NT 10.0; Win64; x64'
+      : 'X11; Linux x86_64';
+  return (
+    `Mozilla/5.0 (${system}) AppleWebKit/537.36 ` +
+    '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+  );
+}
+
+function parseShelfBookIds(result) {
+  const rows = result?.data?.book_shelf_info;
+  return Array.isArray(rows)
+    ? [...new Set(rows.map((row) => String(row?.book_id || '')).filter(Boolean))]
+    : [];
 }
 
 function assertApiSuccess(result, fallbackMessage) {
@@ -351,7 +400,10 @@ module.exports = {
   FanqieClient,
   FanqieError,
   extractChapterFont,
+  getDefaultUserAgent,
   normalizeCookie,
+  normalizeUserAgent,
   parseFanqieInput,
   parseInitialState,
+  parseShelfBookIds,
 };

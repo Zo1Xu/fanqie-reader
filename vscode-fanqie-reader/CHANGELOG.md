@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- 修复扫码登录过早保存不完整会话，以及后续请求硬编码 Windows User-Agent 导致书架为空的问题。
+- 书架请求现在保持扫码浏览器的实际 User-Agent，并按官网请求使用 JSON Accept 与书架 Referer。
+- 区分底部阅读区与书架刷新的产品图标，避免 Cursor/VS Code 标题栏中出现视觉重复。
+- CI 改为在 Linux、Windows 和 macOS 三平台并行执行检查与测试。
+
 ## [0.7.0] - 2026-08-27
 
 - 新增 macOS Safari 登录支持，使用系统自带 `safaridriver` 创建隔离会话。

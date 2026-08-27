@@ -3,10 +3,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  FanqieClient,
   extractChapterFont,
+  getDefaultUserAgent,
   normalizeCookie,
+  normalizeUserAgent,
   parseFanqieInput,
   parseInitialState,
+  parseShelfBookIds,
 } = require('../src/fanqieClient');
 
 test('parseInitialState reads nested JSON and escaped braces', () => {
@@ -32,6 +36,62 @@ test('parseFanqieInput recognizes book IDs and links', () => {
 
 test('normalizeCookie strips copied header prefix and line breaks', () => {
   assert.equal(normalizeCookie(' Cookie: a=1;\r\n b=2 '), 'a=1; b=2');
+});
+
+test('parseShelfBookIds reads the captured bookshelf field and removes duplicates', () => {
+  assert.deepEqual(parseShelfBookIds({
+    code: 0,
+    data: {
+      book_list: null,
+      book_list_info: null,
+      book_shelf_info: [
+        { book_id: '7636702239288986649' },
+        { book_id: '7493943874184825918' },
+        { book_id: '7636702239288986649' },
+      ],
+    },
+  }), ['7636702239288986649', '7493943874184825918']);
+});
+
+test('default request user agent follows Windows and macOS', () => {
+  assert.match(getDefaultUserAgent('win32'), /Windows NT 10\.0/);
+  assert.match(getDefaultUserAgent('darwin'), /Macintosh; Intel Mac OS X/);
+  assert.equal(normalizeUserAgent('Browser\r\nInjected'), 'Browser Injected');
+});
+
+test('login stores the browser user agent and mirrors browser bookshelf headers', async (t) => {
+  const originalFetch = global.fetch;
+  const requests = [];
+  const values = new Map();
+  global.fetch = async (url, options) => {
+    requests.push({ url, options });
+    const payload = url.includes('/api/user/info/v2')
+      ? { code: 0, data: { id: 'account-1', name: '测试账号' } }
+      : {
+          code: 0,
+          data: { book_shelf_info: [{ book_id: '7636702239288986649' }] },
+        };
+    return new Response(JSON.stringify(payload), { status: 200 });
+  };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const client = new FanqieClient({
+    get: async (key) => values.get(key),
+    store: async (key, value) => { values.set(key, value); },
+    delete: async (key) => { values.delete(key); },
+  });
+  const browserUserAgent = 'Mozilla/5.0 (Macintosh) TestBrowser/151';
+  const user = await client.saveCookie('sessionid=secret', {
+    userAgent: browserUserAgent,
+  });
+
+  assert.equal(user.id, 'account-1');
+  assert.equal(values.get('fanqieReader.userAgent'), browserUserAgent);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].options.headers['User-Agent'], browserUserAgent);
+  assert.equal(requests[1].options.headers['User-Agent'], browserUserAgent);
+  assert.equal(requests[1].options.headers.Referer, 'https://fanqienovel.com/bookshelf');
+  assert.equal(requests[1].options.headers.Accept, 'application/json, text/plain, */*');
 });
 
 test('extractChapterFont selects the reader regular woff2 font', () => {

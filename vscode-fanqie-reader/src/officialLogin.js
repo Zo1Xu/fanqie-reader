@@ -205,6 +205,7 @@ class OfficialLogin {
       });
       const page = await context.newPage();
       await navigateToLoginPage(page);
+      const userAgent = await getBrowserUserAgent(page);
       if (browser.browserName === 'safari') {
         await clickElement(
           page.getByText('扫码登录', { exact: true }).first(),
@@ -231,7 +232,10 @@ class OfficialLogin {
         if (cookies.some((cookie) => LOGIN_COOKIE_NAMES.has(cookie.name))) {
           const cookieHeader = serializeCookies(cookies);
           try {
-            const user = await this.client.saveCookie(cookieHeader);
+            const user = await saveBrowserSession(this.client, context, page, {
+              cookieHeader,
+              userAgent,
+            });
             return user;
           } catch (error) {
             if (!['NOT_LOGGED_IN', 'API_ERROR'].includes(error.code)) {
@@ -340,6 +344,7 @@ class OfficialLogin {
       };
 
       await loadQrCode();
+      const userAgent = await getBrowserUserAgent(page);
       const deadline = Date.now() + LOGIN_TIMEOUT_MS;
       while (Date.now() < deadline) {
         if (options.cancellationToken?.isCancellationRequested) {
@@ -353,7 +358,10 @@ class OfficialLogin {
         if (cookies.some((cookie) => LOGIN_COOKIE_NAMES.has(cookie.name))) {
           const cookieHeader = serializeCookies(cookies);
           try {
-            const user = await this.client.saveCookie(cookieHeader);
+            const user = await saveBrowserSession(this.client, context, page, {
+              cookieHeader,
+              userAgent,
+            });
             options.onStatus?.('登录成功');
             return user;
           } catch (error) {
@@ -453,6 +461,7 @@ class OfficialLogin {
       }
       await this.#setPhoneWindowVisible(session, false);
       await navigateToLoginPage(page);
+      session.userAgent = await getBrowserUserAgent(page);
       await page.getByText('验证码登录', { exact: true }).waitFor({
         state: 'visible',
         timeout: LOGIN_UI_TIMEOUT_MS,
@@ -507,7 +516,10 @@ class OfficialLogin {
       return undefined;
     }
     try {
-      const user = await this.client.saveCookie(serializeCookies(cookies));
+      const user = await saveBrowserSession(this.client, session.context, session.page, {
+        cookieHeader: serializeCookies(cookies),
+        userAgent: session.userAgent,
+      });
       await this.cancelPhoneLogin();
       return user;
     } catch (error) {
@@ -839,6 +851,31 @@ function serializeCookies(cookies) {
     .join('; ');
 }
 
+async function getBrowserUserAgent(page) {
+  try {
+    return String(
+      await page.evaluate(() => globalThis.navigator?.userAgent || ''),
+    ).trim();
+  } catch {
+    return '';
+  }
+}
+
+async function saveBrowserSession(client, context, page, options = {}) {
+  const userAgent = options.userAgent || await getBrowserUserAgent(page);
+  const cookieHeader = options.cookieHeader || serializeCookies(
+    await context.cookies(BASE_URL),
+  );
+
+  // Account identity becomes available slightly before the redirect finishes
+  // establishing the web bookshelf session. Validate without persisting, then
+  // give the official page one short turn to set its remaining cookies.
+  await client.validateCookie(cookieHeader, { userAgent });
+  await (options.delay || delay)(750);
+  const settledCookieHeader = serializeCookies(await context.cookies(BASE_URL));
+  return client.saveCookie(settledCookieHeader || cookieHeader, { userAgent });
+}
+
 function findBrowserExecutable(options = {}) {
   const platform = options.platform || process.platform;
   const env = options.env || process.env;
@@ -928,12 +965,14 @@ module.exports = {
   findBrowserExecutable,
   getBackgroundBrowserLaunchOptions,
   getBrowserNotFoundMessage,
+  getBrowserUserAgent,
   isSafariExecutable,
   isValidPhone,
   isValidSmsCode,
   maskPhone,
   navigateToLoginPage,
   normalizePhone,
+  saveBrowserSession,
   serializeCookies,
   showBrowserWindow,
 };

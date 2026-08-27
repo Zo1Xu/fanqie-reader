@@ -10,7 +10,12 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    name: Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
         working-directory: vscode-fanqie-reader
@@ -33,13 +38,14 @@ jobs:
         run: npm run verify
 
       - name: Build CI VSIX
+        if: runner.os == 'Linux'
         run: npm run package -- --out fanqie-reader-ci.vsix
 
       - name: Upload CI VSIX
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: fanqie-reader-ci
           path: vscode-fanqie-reader/fanqie-reader-ci.vsix
           if-no-files-found: error
           retention-days: 7
-

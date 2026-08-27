@@ -11,12 +11,14 @@ const {
   findBrowserExecutable,
   getBackgroundBrowserLaunchOptions,
   getBrowserNotFoundMessage,
+  getBrowserUserAgent,
   isSafariExecutable,
   isValidPhone,
   isValidSmsCode,
   maskPhone,
   navigateToLoginPage,
   normalizePhone,
+  saveBrowserSession,
   serializeCookies,
   showBrowserWindow,
 } = require('../src/officialLogin');
@@ -122,6 +124,52 @@ test('serializeCookies keeps only Fanqie cookies and removes duplicates', () => 
     { name: 'foreign', value: 'no', domain: 'example.com' },
   ]);
   assert.equal(result, 'csrf=safe; sessionid=new');
+});
+
+test('browser login preserves its real platform user agent after cookies settle', async () => {
+  const events = [];
+  let cookieRead = 0;
+  const context = {
+    cookies: async () => {
+      cookieRead += 1;
+      return [{
+        name: cookieRead === 1 ? 'sessionid' : 'ttwid',
+        value: String(cookieRead),
+        domain: '.fanqienovel.com',
+      }];
+    },
+  };
+  const page = {
+    evaluate: async () => 'Mozilla/5.0 (Macintosh) Safari/18.0',
+  };
+  const client = {
+    validateCookie: async (cookie, options) => {
+      events.push(['validate', cookie, options]);
+    },
+    saveCookie: async (cookie, options) => {
+      events.push(['save', cookie, options]);
+      return { id: 'account-1' };
+    },
+  };
+
+  assert.equal(await getBrowserUserAgent(page), 'Mozilla/5.0 (Macintosh) Safari/18.0');
+  const user = await saveBrowserSession(client, context, page, {
+    cookieHeader: 'sessionid=1',
+    delay: async () => {},
+  });
+  assert.equal(user.id, 'account-1');
+  assert.deepEqual(events, [
+    [
+      'validate',
+      'sessionid=1',
+      { userAgent: 'Mozilla/5.0 (Macintosh) Safari/18.0' },
+    ],
+    [
+      'save',
+      'sessionid=1',
+      { userAgent: 'Mozilla/5.0 (Macintosh) Safari/18.0' },
+    ],
+  ]);
 });
 
 test('findBrowserExecutable prefers an explicitly configured path', () => {

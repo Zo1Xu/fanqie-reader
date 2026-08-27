@@ -2,7 +2,7 @@
   "name": "fanqie-reader",
   "displayName": "番茄阅读",
   "description": "在 VS Code 侧边栏中浏览番茄小说书架，并在底部 Panel 阅读章节。",
-  "version": "0.7.0",
+  "version": "0.7.3",
   "publisher": "Zo1Xu",
   "private": true,
   "license": "AGPL-3.0-only",
@@ -65,7 +65,7 @@
       {
         "command": "fanqieReader.showReader",
         "title": "番茄阅读：显示底部阅读区",
-        "icon": "$(book)"
+        "icon": "$(preview)"
       },
       {
         "command": "fanqieReader.previousChapter",
@@ -96,7 +96,7 @@
       {
         "command": "fanqieReader.refresh",
         "title": "番茄阅读：刷新书架",
-        "icon": "$(refresh)"
+        "icon": "$(sync)"
       }
     ],
     "viewsContainers": {
