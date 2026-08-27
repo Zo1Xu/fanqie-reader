@@ -56,8 +56,15 @@ class OfficialLogin {
         timeout: PHONE_ACTION_TIMEOUT_MS,
       });
       if (state.status === 'verification_required') {
+        if (session.browserName === 'safari') {
+          return this.completeSecurityVerification(options);
+        }
         options.onStatus?.('需要完成番茄官方安全验证');
-        return { status: 'verification_required', phone: maskPhone(normalizedPhone) };
+        return {
+          status: 'verification_required',
+          phone: maskPhone(normalizedPhone),
+          browser: session.browserName,
+        };
       }
       if (state.status === 'error') {
         throw new OfficialLoginError(state.message, 'SMS_SEND_FAILED');
@@ -99,8 +106,11 @@ class OfficialLogin {
         timeout: PHONE_LOGIN_TIMEOUT_MS,
       });
       if (result.status === 'verification_required') {
+        if (session.browserName === 'safari') {
+          return this.completeSecurityVerification(options);
+        }
         options.onStatus?.('需要完成番茄官方安全验证');
-        return { status: 'verification_required' };
+        return { status: 'verification_required', browser: session.browserName };
       }
       if (result.status === 'error') {
         throw new OfficialLoginError(result.message, 'SMS_LOGIN_FAILED');
@@ -122,7 +132,11 @@ class OfficialLogin {
     }
 
     await this.#setPhoneWindowVisible(session, true);
-    options.onStatus?.('请在番茄官方小窗口中手动完成滑块验证');
+    options.onStatus?.(
+      session.browserName === 'safari'
+        ? '请在 Safari 中手动完成滑块验证，完成后无需关闭窗口'
+        : '请在番茄官方小窗口中手动完成滑块验证',
+    );
     const deadline = Date.now() + VERIFICATION_TIMEOUT_MS;
     let verificationSeen = false;
 
@@ -180,7 +194,7 @@ class OfficialLogin {
     const executablePath = findBrowserExecutable({ preferredPath: options.browserPath });
     if (!executablePath) {
       throw new OfficialLoginError(
-        '未找到 Chrome、Edge 或 Chromium。请安装其中一个浏览器，或在设置中填写 fanqieReader.browserPath。',
+        getBrowserNotFoundMessage(),
         'BROWSER_NOT_FOUND',
       );
     }
@@ -189,8 +203,7 @@ class OfficialLogin {
     let disconnected = false;
     try {
       options.onStatus?.('正在打开番茄官方登录页…');
-      browser = await chromium.launch({
-        executablePath,
+      browser = await launchLoginBrowser(executablePath, {
         headless: false,
         args: ['--window-size=520,820'],
       });
@@ -203,8 +216,18 @@ class OfficialLogin {
       });
       const page = await context.newPage();
       await navigateToLoginPage(page);
+      if (browser.browserName === 'safari') {
+        await clickElement(
+          page.getByText('扫码登录', { exact: true }).first(),
+          LOGIN_UI_TIMEOUT_MS,
+        );
+      }
       await page.bringToFront();
-      options.onStatus?.('请在浏览器中使用手机验证码或番茄 App 扫码登录');
+      options.onStatus?.(
+        browser.browserName === 'safari'
+          ? '请使用番茄小说 App 扫描 Safari 中的二维码'
+          : '请在浏览器中使用手机验证码或番茄 App 扫码登录',
+      );
 
       const deadline = Date.now() + LOGIN_TIMEOUT_MS;
       while (Date.now() < deadline) {
@@ -234,10 +257,7 @@ class OfficialLogin {
       if (error instanceof OfficialLoginError) {
         throw error;
       }
-      throw new OfficialLoginError(
-        `无法完成官方登录：${cleanAutomationMessage(error)}`,
-        'LOGIN_FAILED',
-      );
+      throw normalizeLoginError(error, '无法完成官方登录');
     } finally {
       if (browser?.isConnected()) {
         await browser.close().catch(() => {});
@@ -250,7 +270,7 @@ class OfficialLogin {
     const executablePath = findBrowserExecutable({ preferredPath: options.browserPath });
     if (!executablePath) {
       throw new OfficialLoginError(
-        '未找到 Chrome、Edge 或 Chromium。请安装其中一个浏览器，或在设置中填写 fanqieReader.browserPath。',
+        getBrowserNotFoundMessage(),
         'BROWSER_NOT_FOUND',
       );
     }
@@ -259,7 +279,8 @@ class OfficialLogin {
     let disconnected = false;
     try {
       options.onStatus?.('正在创建番茄小说官方账号会话…');
-      browser = await chromium.launch(
+      browser = await launchLoginBrowser(
+        executablePath,
         getBackgroundBrowserLaunchOptions(executablePath),
       );
       browser.on('disconnected', () => {
@@ -377,7 +398,7 @@ class OfficialLogin {
     const executablePath = findBrowserExecutable({ preferredPath: options.browserPath });
     if (!executablePath) {
       throw new OfficialLoginError(
-        '未找到 Chrome、Edge 或 Chromium。请安装其中一个浏览器，或在设置中填写 fanqieReader.browserPath。',
+        getBrowserNotFoundMessage(),
         'BROWSER_NOT_FOUND',
       );
     }
@@ -385,8 +406,7 @@ class OfficialLogin {
     let browser;
     try {
       options.onStatus?.('正在后台创建番茄官方登录环境…');
-      browser = await chromium.launch({
-        executablePath,
+      browser = await launchLoginBrowser(executablePath, {
         headless: false,
         args: ['--start-minimized', '--window-size=520,820'],
       });
@@ -403,6 +423,7 @@ class OfficialLogin {
         disconnected: false,
         verificationPurpose: undefined,
         phone: '',
+        browserName: browser.browserName || 'chromium',
         cdp: undefined,
         windowId: undefined,
       };
@@ -496,7 +517,7 @@ class OfficialLogin {
         }).catch(() => {});
         await session.cdp.send('Browser.setWindowBounds', {
           windowId: session.windowId,
-          bounds: { left: 80, top: 80, width: 520, height: 820 },
+          bounds: getVerificationWindowBounds(session.browserName),
         }).catch(() => {});
       } else {
         await session.cdp.send('Browser.setWindowBounds', {
@@ -641,6 +662,9 @@ function normalizeLoginError(error, prefix) {
   if (error instanceof OfficialLoginError) {
     return error;
   }
+  if (error?.code === 'SAFARI_AUTOMATION_DISABLED' || error?.code === 'SAFARI_SESSION_BUSY') {
+    return new OfficialLoginError(error.message, error.code);
+  }
   return new OfficialLoginError(
     `${prefix}：${cleanAutomationMessage(error)}`,
     'LOGIN_FAILED',
@@ -690,6 +714,36 @@ function getBackgroundBrowserLaunchOptions(executablePath) {
       '--disable-renderer-backgrounding',
     ],
   };
+}
+
+function getVerificationWindowBounds(browserName) {
+  return browserName === 'safari'
+    ? { left: 100, top: 80, width: 900, height: 800 }
+    : { left: 80, top: 80, width: 520, height: 820 };
+}
+
+async function launchLoginBrowser(executablePath, options = {}) {
+  if (isSafariExecutable(executablePath)) {
+    const { launchSafariBrowser } = require('./safariBrowser');
+    return launchSafariBrowser({
+      executablePath,
+      navigationTimeout: LOGIN_NAVIGATION_TIMEOUT_MS,
+      scriptTimeout: LOGIN_UI_TIMEOUT_MS,
+    });
+  }
+  return chromium.launch({ ...options, executablePath });
+}
+
+function isSafariExecutable(executablePath) {
+  return /(?:^|[\\/])(?:safaridriver|Safari(?: Technology Preview)?)$/i.test(
+    String(executablePath || ''),
+  );
+}
+
+function getBrowserNotFoundMessage(platform = process.platform) {
+  return platform === 'darwin'
+    ? '未找到 Safari、Chrome、Edge 或 Chromium。请确认 Safari 可用，或在设置中填写 fanqieReader.browserPath。'
+    : '未找到 Chrome、Edge 或 Chromium。请安装其中一个浏览器，或在设置中填写 fanqieReader.browserPath。';
 }
 
 async function hideBrowserWindow(context, page) {
@@ -795,6 +849,10 @@ function findBrowserExecutable(options = {}) {
         );
       }
     }
+    candidates.push(
+      '/Applications/Safari Technology Preview.app/Contents/MacOS/safaridriver',
+      '/usr/bin/safaridriver',
+    );
   } else {
     candidates.push(
       '/usr/bin/google-chrome',
@@ -837,6 +895,9 @@ module.exports = {
   clickElement,
   findBrowserExecutable,
   getBackgroundBrowserLaunchOptions,
+  getBrowserNotFoundMessage,
+  getVerificationWindowBounds,
+  isSafariExecutable,
   isValidPhone,
   isValidSmsCode,
   maskPhone,

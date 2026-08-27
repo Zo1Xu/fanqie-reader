@@ -9,6 +9,9 @@ const {
   clickElement,
   findBrowserExecutable,
   getBackgroundBrowserLaunchOptions,
+  getBrowserNotFoundMessage,
+  getVerificationWindowBounds,
+  isSafariExecutable,
   isValidPhone,
   isValidSmsCode,
   maskPhone,
@@ -46,6 +49,21 @@ test('QR login keeps its real browser off-screen without background throttling',
   assert.equal(options.args.includes('--start-minimized'), false);
   assert.equal(options.args.includes('--disable-background-timer-throttling'), true);
   assert.equal(options.args.includes('--disable-renderer-backgrounding'), true);
+});
+
+test('Safari manual verification uses a wider visible window', () => {
+  assert.deepEqual(getVerificationWindowBounds('safari'), {
+    left: 100,
+    top: 80,
+    width: 900,
+    height: 800,
+  });
+  assert.deepEqual(getVerificationWindowBounds('chromium'), {
+    left: 80,
+    top: 80,
+    width: 520,
+    height: 820,
+  });
 });
 
 test('serializeCookies keeps only Fanqie cookies and removes duplicates', () => {
@@ -118,6 +136,28 @@ test('findBrowserExecutable expands a configured home-relative path on macOS', (
     existsSync: (candidate) => candidate === expected,
   });
   assert.equal(result, expected);
+});
+
+test('findBrowserExecutable falls back to the built-in Safari driver on macOS', () => {
+  const expected = '/usr/bin/safaridriver';
+  const result = findBrowserExecutable({
+    platform: 'darwin',
+    env: { HOME: '/Users/demo' },
+    existsSync: (candidate) => candidate === expected,
+  });
+  assert.equal(result, expected);
+  assert.equal(isSafariExecutable(result), true);
+});
+
+test('Safari is only advertised as a built-in browser on macOS', () => {
+  assert.match(getBrowserNotFoundMessage('darwin'), /Safari、Chrome/);
+  assert.doesNotMatch(getBrowserNotFoundMessage('linux'), /Safari/);
+  assert.equal(
+    isSafariExecutable(
+      '/Applications/Safari Technology Preview.app/Contents/MacOS/Safari Technology Preview',
+    ),
+    true,
+  );
 });
 
 test('phone login validates and masks ephemeral credentials', () => {

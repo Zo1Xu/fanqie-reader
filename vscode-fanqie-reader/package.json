@@ -2,7 +2,7 @@
   "name": "fanqie-reader",
   "displayName": "番茄阅读",
   "description": "在 VS Code 侧边栏中浏览番茄小说书架，并在底部 Panel 阅读章节。",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "Zo1Xu",
   "private": true,
   "license": "AGPL-3.0-only",
@@ -199,14 +199,14 @@
           "type": "string",
           "default": "",
           "scope": "application",
-          "description": "可选：用于官方登录窗口的 Chrome、Edge 或 Chromium 路径。macOS 可填写 .app 应用路径；留空时自动检测。"
+          "description": "可选：用于官方登录窗口的浏览器路径。macOS 自动支持 Safari，也可填写 Chrome、Edge、Chromium 或 Safari Technology Preview 的 .app 路径。"
         }
       }
     }
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node --check src/extension.js && node --check src/fanqieClient.js && node --check src/loginView.js && node --check src/officialLogin.js && node --check src/readerPanel.js",
+    "check": "node --check src/extension.js && node --check src/fanqieClient.js && node --check src/loginView.js && node --check src/officialLogin.js && node --check src/safariBrowser.js && node --check src/readerPanel.js",
     "verify": "npm run check && npm test",
     "vscode:prepublish": "npm run verify",
     "package": "vsce package",
@@ -214,7 +214,8 @@
     "package:release": "npm run release:check && vsce package"
   },
   "dependencies": {
-    "playwright-core": "^1.62.1"
+    "playwright-core": "^1.62.1",
+    "selenium-webdriver": "^4.35.0"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.6.2"

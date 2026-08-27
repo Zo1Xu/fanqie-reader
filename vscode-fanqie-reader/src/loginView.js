@@ -116,6 +116,7 @@ class LoginViewProvider {
           type: 'verificationRequired',
           purpose: 'sendSms',
           phone: result.phone,
+          browser: result.browser,
         });
       } else {
         this.#post({ type: 'smsSent', phone: result.phone });
@@ -138,7 +139,11 @@ class LoginViewProvider {
         onStatus: (status) => this.#post({ type: 'phoneStatus', message: status }),
       });
       if (result.status === 'verification_required') {
-        this.#post({ type: 'verificationRequired', purpose: 'submitCode' });
+        this.#post({
+          type: 'verificationRequired',
+          purpose: 'submitCode',
+          browser: result.browser,
+        });
         return;
       }
       this.#post({
@@ -278,7 +283,7 @@ const vscode = acquireVsCodeApi();
 const byId=id=>document.getElementById(id);
 const intro=byId('intro'),spinner=byId('spinner'),qrWrap=byId('qrWrap'),qr=byId('qr'),status=byId('status'),message=byId('message'),start=byId('start'),cancel=byId('cancel');
 const qrTab=byId('qrTab'),phoneTab=byId('phoneTab'),qrPanel=byId('qrPanel'),phonePanel=byId('phonePanel'),phone=byId('phone'),smsCode=byId('smsCode'),agreement=byId('agreement'),sendSms=byId('sendSms'),phoneLogin=byId('phoneLogin'),phoneMessage=byId('phoneMessage'),verification=byId('verification'),openVerification=byId('openVerification');
-let countdownTimer,countdownSeconds=0,qrRunning=false;
+let countdownTimer,countdownSeconds=0,qrRunning=false,verificationBrowser='';
 function activateTab(name,focus=true){
   const phoneActive=name==='phone';qrTab.setAttribute('aria-selected',String(!phoneActive));phoneTab.setAttribute('aria-selected',String(phoneActive));qrTab.tabIndex=phoneActive?-1:0;phoneTab.tabIndex=phoneActive?0:-1;qrPanel.hidden=phoneActive;phonePanel.hidden=!phoneActive;if(focus)(phoneActive?phoneTab:qrTab).focus();
   if(phoneActive&&qrRunning)vscode.postMessage({type:'cancelQr'});
@@ -308,10 +313,10 @@ window.addEventListener('message',({data})=>{
   if(data.type==='phoneLoading'){setPhoneBusy(true,data.action);setPhoneMessage(data.message||'正在处理…')}
   if(data.type==='phoneStatus'){setPhoneMessage(data.message||'')}
   if(data.type==='smsSent'){setPhoneBusy(false);sendSms.textContent='获取验证码';verification.hidden=true;setPhoneMessage('验证码已发送至 '+data.phone+'，请查收短信。','success');startCountdown();smsCode.focus()}
-  if(data.type==='verificationRequired'){setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';verification.hidden=false;byId('verificationText').textContent=data.purpose==='sendSms'?'发送短信前需要完成番茄官方滑块验证。':'登录前需要完成番茄官方滑块验证。';setPhoneMessage('请打开官方验证窗口并手动完成验证。');openVerification.focus()}
-  if(data.type==='verificationOpening'){setPhoneBusy(true);openVerification.disabled=true;setPhoneMessage('官方验证窗口已打开，完成滑块后会自动继续。')}
+  if(data.type==='verificationRequired'){verificationBrowser=data.browser||'';setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';openVerification.disabled=false;verification.hidden=false;const safari=verificationBrowser==='safari';byId('verificationText').textContent=safari?'请在 Safari 中完成滑块安全验证，完成后插件会自动继续。':data.purpose==='sendSms'?'发送短信前需要完成番茄官方滑块验证。':'登录前需要完成番茄官方滑块验证。';openVerification.textContent=safari?'打开 Safari 验证窗口':'打开验证窗口';setPhoneMessage(safari?'检测到安全验证，请切换到 Safari 完成滑块。':'请打开官方验证窗口并手动完成验证。');openVerification.focus()}
+  if(data.type==='verificationOpening'){setPhoneBusy(true);openVerification.disabled=true;setPhoneMessage(verificationBrowser==='safari'?'Safari 验证窗口已打开，请完成滑块；完成后无需关闭 Safari。':'官方验证窗口已打开，完成滑块后会自动继续。')}
   if(data.type==='phoneError'){setPhoneBusy(false);if(countdownSeconds===0)sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';openVerification.disabled=false;setPhoneMessage(data.message||'验证码登录失败。','error')}
-  if(data.type==='phoneIdle'){clearInterval(countdownTimer);countdownSeconds=0;setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';verification.hidden=true;smsCode.value='';setPhoneMessage('本次手机号登录已取消。')}
+  if(data.type==='phoneIdle'){clearInterval(countdownTimer);countdownSeconds=0;verificationBrowser='';setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';openVerification.textContent='打开验证窗口';verification.hidden=true;smsCode.value='';setPhoneMessage('本次手机号登录已取消。')}
   if(data.type==='success'){qrRunning=false;spinner.style.display='none';cancel.hidden=true;start.hidden=true;if(data.method==='phone'){setPhoneBusy(false);verification.hidden=true;phone.value='';smsCode.value='';setPhoneMessage('登录成功：'+data.name,'success')}else{status.textContent='登录成功：'+data.name}}
 });
 </script></body></html>`;

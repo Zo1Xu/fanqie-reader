@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-27
+
+### Added
+
+- macOS 登录支持系统自带 Safari，通过 `safaridriver` 创建隔离会话并安全回收登录 Cookie。
+
+### Changed
+
+- Safari 短信登录触发滑块时保留会话、自动显示 900×800 验证窗口，并等待用户手动完成。
+
+## [0.6.0] - 2026-08-25
+
 ### Fixed
 
 - 修复 macOS 无法发现 `~/Applications` 中的浏览器，以及配置 `.app` 路径后无法登录的问题。

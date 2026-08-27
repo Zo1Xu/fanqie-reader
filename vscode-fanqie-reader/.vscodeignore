@@ -9,3 +9,4 @@ resources/icon-source.svg
 *-login-page.png
 *-preview.png
 npm-debug.log*
+node_modules/selenium-webdriver/bin/**

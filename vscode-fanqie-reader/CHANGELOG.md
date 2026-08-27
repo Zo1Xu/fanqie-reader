@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-27
+
+- 新增 macOS Safari 登录支持，使用系统自带 `safaridriver` 创建隔离会话。
+- Safari 短信登录触发滑块时保留会话、自动显示 900×800 验证窗口，并等待用户手动完成。
+
+## [0.6.0] - 2026-08-25
+
 - 修复 macOS 无法发现 `~/Applications` 中的浏览器，以及配置 `.app` 路径后无法登录的问题。
 - 准备首次 GitHub 与 VS Code Marketplace 公开发布。
 - 将扩展许可证统一为 `AGPL-3.0-only`。
