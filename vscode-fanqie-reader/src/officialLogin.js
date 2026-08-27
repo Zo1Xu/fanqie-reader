@@ -56,15 +56,9 @@ class OfficialLogin {
         timeout: PHONE_ACTION_TIMEOUT_MS,
       });
       if (state.status === 'verification_required') {
-        if (session.browserName === 'safari') {
-          return this.completeSecurityVerification(options);
-        }
+        await this.#assertManualVerificationSupported(session);
         options.onStatus?.('需要完成番茄官方安全验证');
-        return {
-          status: 'verification_required',
-          phone: maskPhone(normalizedPhone),
-          browser: session.browserName,
-        };
+        return { status: 'verification_required', phone: maskPhone(normalizedPhone) };
       }
       if (state.status === 'error') {
         throw new OfficialLoginError(state.message, 'SMS_SEND_FAILED');
@@ -106,11 +100,9 @@ class OfficialLogin {
         timeout: PHONE_LOGIN_TIMEOUT_MS,
       });
       if (result.status === 'verification_required') {
-        if (session.browserName === 'safari') {
-          return this.completeSecurityVerification(options);
-        }
+        await this.#assertManualVerificationSupported(session);
         options.onStatus?.('需要完成番茄官方安全验证');
-        return { status: 'verification_required', browser: session.browserName };
+        return { status: 'verification_required' };
       }
       if (result.status === 'error') {
         throw new OfficialLoginError(result.message, 'SMS_LOGIN_FAILED');
@@ -130,13 +122,10 @@ class OfficialLogin {
     if (!purpose) {
       throw new OfficialLoginError('当前没有待完成的安全验证。', 'VERIFICATION_NOT_REQUIRED');
     }
+    await this.#assertManualVerificationSupported(session);
 
     await this.#setPhoneWindowVisible(session, true);
-    options.onStatus?.(
-      session.browserName === 'safari'
-        ? '请在 Safari 中手动完成滑块验证，完成后无需关闭窗口'
-        : '请在番茄官方小窗口中手动完成滑块验证',
-    );
+    options.onStatus?.('请在番茄官方小窗口中手动完成滑块验证');
     const deadline = Date.now() + VERIFICATION_TIMEOUT_MS;
     let verificationSeen = false;
 
@@ -291,7 +280,16 @@ class OfficialLogin {
         viewport: { width: 480, height: 760 },
       });
       const page = await context.newPage();
-      await hideBrowserWindow(context, page);
+      if (browser.browserName === 'safari') {
+        await showBrowserWindow(context, page, {
+          left: 80,
+          top: 80,
+          width: 720,
+          height: 820,
+        });
+      } else {
+        await hideBrowserWindow(context, page);
+      }
       let qrCreatedAt = 0;
       let lastQrCode = '';
 
@@ -326,7 +324,19 @@ class OfficialLogin {
           lastQrCode = source;
           options.onQrCode?.(source);
         }
-        options.onStatus?.('请使用番茄小说 App 扫码');
+        if (browser.browserName === 'safari') {
+          await showBrowserWindow(context, page, {
+            left: 80,
+            top: 80,
+            width: 720,
+            height: 820,
+          });
+          options.onStatus?.(
+            '请扫描侧边栏或 Safari 窗口中的二维码；无需点击 Safari 窗口',
+          );
+        } else {
+          options.onStatus?.('请使用番茄小说 App 扫码');
+        }
       };
 
       await loadQrCode();
@@ -517,7 +527,7 @@ class OfficialLogin {
         }).catch(() => {});
         await session.cdp.send('Browser.setWindowBounds', {
           windowId: session.windowId,
-          bounds: getVerificationWindowBounds(session.browserName),
+          bounds: { left: 80, top: 80, width: 520, height: 820 },
         }).catch(() => {});
       } else {
         await session.cdp.send('Browser.setWindowBounds', {
@@ -535,6 +545,16 @@ class OfficialLogin {
     const session = this.phoneSession;
     this.#assertPhoneSession(session);
     return session;
+  }
+
+  async #assertManualVerificationSupported(session) {
+    if (session.browserName === 'safari') {
+      await this.cancelPhoneLogin();
+      throw new OfficialLoginError(
+        'Safari 会阻止用户操作 WebDriver 自动化窗口；“Continue Session”只会继续自动化，无法解除交互保护。请改用扫码登录；如需手动完成滑块，请使用 Chrome、Edge 或 Chromium。',
+        'SAFARI_VERIFICATION_UNSUPPORTED',
+      );
+    }
   }
 
   #assertPhoneSession(session) {
@@ -716,12 +736,6 @@ function getBackgroundBrowserLaunchOptions(executablePath) {
   };
 }
 
-function getVerificationWindowBounds(browserName) {
-  return browserName === 'safari'
-    ? { left: 100, top: 80, width: 900, height: 800 }
-    : { left: 80, top: 80, width: 520, height: 820 };
-}
-
 async function launchLoginBrowser(executablePath, options = {}) {
   if (isSafariExecutable(executablePath)) {
     const { launchSafariBrowser } = require('./safariBrowser');
@@ -769,6 +783,24 @@ async function hideBrowserWindow(context, page) {
       },
     })
     .catch(() => {});
+}
+
+async function showBrowserWindow(context, page, bounds) {
+  const cdp = await context.newCDPSession(page).catch(() => undefined);
+  if (!cdp) return;
+  const windowInfo = await cdp
+    .send('Browser.getWindowForTarget')
+    .catch(() => undefined);
+  if (windowInfo?.windowId === undefined) return;
+  await cdp.send('Browser.setWindowBounds', {
+    windowId: windowInfo.windowId,
+    bounds: { windowState: 'normal' },
+  }).catch(() => {});
+  await cdp.send('Browser.setWindowBounds', {
+    windowId: windowInfo.windowId,
+    bounds,
+  }).catch(() => {});
+  await page.bringToFront().catch(() => {});
 }
 
 function cleanAutomationMessage(error) {
@@ -896,7 +928,6 @@ module.exports = {
   findBrowserExecutable,
   getBackgroundBrowserLaunchOptions,
   getBrowserNotFoundMessage,
-  getVerificationWindowBounds,
   isSafariExecutable,
   isValidPhone,
   isValidSmsCode,
@@ -904,4 +935,5 @@ module.exports = {
   navigateToLoginPage,
   normalizePhone,
   serializeCookies,
+  showBrowserWindow,
 };

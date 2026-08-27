@@ -44,7 +44,7 @@ code --install-extension .\fanqie-reader-v0.5.4.vsix
 
 扫码和侧边栏登录支持 Chrome、Edge、Chromium，以及 macOS 自带的 Safari。若 Chromium 浏览器位于自定义路径，请设置 `fanqieReader.browserPath`；macOS 可直接填写 `/Applications` 或 `~/Applications` 下的 `.app` 路径。
 
-仅使用 Safari 时，需要先允许 WebDriver 自动化：在 Safari 的“开发”菜单中打开“开发者设置”，勾选“允许远程自动化”；也可以在终端运行 `safaridriver --enable`。扩展使用 Safari 独立的临时自动化窗口，不读取日常浏览记录或已有 Cookie。短信登录触发滑块时，扩展会自动显示 Safari 窗口并持续等待用户手动完成；完成后无需关闭 Safari。不同 macOS、Safari 或验证码服务版本可能限制自动化窗口中的鼠标拖动，无法完成时请改用扫码登录或 Chromium 浏览器。
+仅使用 Safari 时，需要先允许 WebDriver 自动化：在 Safari 的“开发”菜单中打开“开发者设置”，勾选“允许远程自动化”；也可以在终端运行 `safaridriver --enable`。扩展使用 Safari 独立的临时自动化窗口，不读取日常浏览记录或已有 Cookie。Safari 扫码时会同时显示侧边栏二维码和官方 Safari 二维码窗口；若侧边栏识别困难，可直接扫描 Safari 窗口，但无需点击窗口。Safari 会阻止用户操作 WebDriver 自动化窗口，因此短信登录一旦触发手动滑块，扩展会结束该会话并提示改用扫码登录或 Chrome、Edge、Chromium；点击系统弹窗中的“Continue Session”只会继续自动化，不会允许手动拖动。
 
 ## 登录与数据
 
@@ -81,7 +81,7 @@ code --install-extension .\fanqie-reader-v0.5.4.vsix
 ## 已知限制
 
 - 网页结构或接口变化可能导致功能失效。
-- 密码输入和交互式风控必须在番茄官方窗口中完成；Safari 手动滑块支持仍需真实设备验证，无法拖动时请使用扫码登录或 Chromium 浏览器。
+- 密码输入和交互式风控必须在番茄官方窗口中完成；Safari 无法手动操作 WebDriver 窗口中的滑块，此时请使用扫码登录或 Chromium 浏览器。
 - 首个公开版本不把进度同步回番茄账号。
 - 请遵守番茄小说服务条款和内容版权要求，不要用于批量抓取或内容再分发。
 

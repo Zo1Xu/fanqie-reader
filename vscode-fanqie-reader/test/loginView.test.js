@@ -34,9 +34,10 @@ test('login sidebar uses a strict CSP and accessible live regions', () => {
   assert.match(html, /aria-invalid/);
   assert.match(html, /不会自动破解滑块/);
   assert.match(html, /使用番茄小说账号，由官网统一认证/);
-  assert.match(html, /官网认证页仅在屏幕外后台运行/);
-  assert.match(html, /请在 Safari 中完成滑块安全验证/);
-  assert.match(html, /完成后无需关闭 Safari/);
+  assert.match(html, /Safari 还会显示官方二维码窗口/);
+  assert.match(html, /class="qr-frame"/);
+  assert.match(html, /\.qr\{display:block;width:auto;height:auto;max-width:100%/);
+  assert.doesNotMatch(html, /width:min\(190px,85%\)/);
 });
 
 test('login action opens the contributed sidebar container', async () => {

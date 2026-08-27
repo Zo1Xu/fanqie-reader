@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  OfficialLogin,
   buildLoginUrl,
   classifyPhonePageText,
   cleanAutomationMessage,
@@ -10,7 +11,6 @@ const {
   findBrowserExecutable,
   getBackgroundBrowserLaunchOptions,
   getBrowserNotFoundMessage,
-  getVerificationWindowBounds,
   isSafariExecutable,
   isValidPhone,
   isValidSmsCode,
@@ -18,7 +18,36 @@ const {
   navigateToLoginPage,
   normalizePhone,
   serializeCookies,
+  showBrowserWindow,
 } = require('../src/officialLogin');
+
+test('Safari manual verification ends the unusable automation session with guidance', async () => {
+  const login = new OfficialLogin({});
+  let closed = false;
+  login.phoneSession = {
+    browserName: 'safari',
+    verificationPurpose: 'sendSms',
+    cancelled: false,
+    disconnected: false,
+    browser: {
+      isConnected: () => true,
+      close: async () => { closed = true; },
+    },
+    page: { isClosed: () => false },
+  };
+
+  await assert.rejects(
+    login.completeSecurityVerification(),
+    (error) => {
+      assert.equal(error.code, 'SAFARI_VERIFICATION_UNSUPPORTED');
+      assert.match(error.message, /Continue Session/);
+      assert.match(error.message, /扫码登录/);
+      return true;
+    },
+  );
+  assert.equal(closed, true);
+  assert.equal(login.phoneSession, undefined);
+});
 
 test('buildLoginUrl uses Fanqie unified SSO and returns to the reader bookshelf', () => {
   const url = new URL(buildLoginUrl());
@@ -51,19 +80,38 @@ test('QR login keeps its real browser off-screen without background throttling',
   assert.equal(options.args.includes('--disable-renderer-backgrounding'), true);
 });
 
-test('Safari manual verification uses a wider visible window', () => {
-  assert.deepEqual(getVerificationWindowBounds('safari'), {
-    left: 100,
-    top: 80,
-    width: 900,
-    height: 800,
-  });
-  assert.deepEqual(getVerificationWindowBounds('chromium'), {
-    left: 80,
-    top: 80,
-    width: 520,
-    height: 820,
-  });
+test('Safari QR login restores a visible official window without user interaction', async () => {
+  const commands = [];
+  let broughtToFront = false;
+  await showBrowserWindow(
+    {
+      newCDPSession: async () => ({
+        send: async (method, parameters) => {
+          commands.push({ method, parameters });
+          if (method === 'Browser.getWindowForTarget') return { windowId: 7 };
+          return undefined;
+        },
+      }),
+    },
+    { bringToFront: async () => { broughtToFront = true; } },
+    { left: 80, top: 80, width: 720, height: 820 },
+  );
+
+  assert.deepEqual(commands, [
+    { method: 'Browser.getWindowForTarget', parameters: undefined },
+    {
+      method: 'Browser.setWindowBounds',
+      parameters: { windowId: 7, bounds: { windowState: 'normal' } },
+    },
+    {
+      method: 'Browser.setWindowBounds',
+      parameters: {
+        windowId: 7,
+        bounds: { left: 80, top: 80, width: 720, height: 820 },
+      },
+    },
+  ]);
+  assert.equal(broughtToFront, true);
 });
 
 test('serializeCookies keeps only Fanqie cookies and removes duplicates', () => {

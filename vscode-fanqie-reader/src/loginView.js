@@ -116,7 +116,6 @@ class LoginViewProvider {
           type: 'verificationRequired',
           purpose: 'sendSms',
           phone: result.phone,
-          browser: result.browser,
         });
       } else {
         this.#post({ type: 'smsSent', phone: result.phone });
@@ -139,11 +138,7 @@ class LoginViewProvider {
         onStatus: (status) => this.#post({ type: 'phoneStatus', message: status }),
       });
       if (result.status === 'verification_required') {
-        this.#post({
-          type: 'verificationRequired',
-          purpose: 'submitCode',
-          browser: result.browser,
-        });
+        this.#post({ type: 'verificationRequired', purpose: 'submitCode' });
         return;
       }
       this.#post({
@@ -219,7 +214,7 @@ function getLoginHtml() {
 .brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}.tomato{width:28px;height:28px;flex:0 0 auto;overflow:visible}.title{font-size:15px;font-weight:600}.muted{color:var(--vscode-descriptionForeground)}
 .tabs{display:grid;grid-template-columns:1fr 1fr;margin:0 -4px 14px;border-bottom:1px solid var(--vscode-widget-border)}.tab{min-height:34px;padding:6px;border:0;border-bottom:2px solid transparent;border-radius:0;color:var(--vscode-descriptionForeground);background:transparent}.tab[aria-selected="true"]{border-bottom-color:var(--vscode-focusBorder);color:var(--vscode-foreground);font-weight:600}
 button{min-height:36px;padding:7px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font:inherit}button:disabled{cursor:not-allowed;opacity:.6}button:focus-visible,input:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:2px}.primary{width:100%;color:var(--vscode-button-foreground);background:var(--vscode-button-background)}.primary:hover:not(:disabled){background:var(--vscode-button-hoverBackground)}.secondary{width:100%;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground)}.secondary:hover:not(:disabled){background:var(--vscode-button-secondaryHoverBackground)}.link{min-height:28px;padding:3px;color:var(--vscode-textLink-foreground);background:transparent}.link:hover{text-decoration:underline}
-.qr-wrap{text-align:center}.qr{display:block;width:min(190px,85%);aspect-ratio:1;margin:12px auto;padding:7px;border-radius:8px;background:#fff;image-rendering:pixelated}.status{min-height:20px;margin:8px 0;color:var(--vscode-descriptionForeground)}.error{color:var(--vscode-errorForeground)}.success{color:var(--vscode-testing-iconPassed)}
+.qr-wrap{text-align:center}.qr-frame{display:inline-block;max-width:100%;margin:12px auto;padding:12px;border-radius:4px;background:#fff;line-height:0}.qr{display:block;width:auto;height:auto;max-width:100%;margin:0;image-rendering:crisp-edges;image-rendering:pixelated}.status{min-height:20px;margin:8px 0;color:var(--vscode-descriptionForeground)}.error{color:var(--vscode-errorForeground)}.success{color:var(--vscode-testing-iconPassed)}
 .actions{display:grid;gap:8px;margin-top:12px}.field{display:grid;gap:5px;margin:0 0 12px}.field label{font-weight:600}.field input{width:100%;height:36px;padding:7px 9px;border:1px solid var(--vscode-input-border,transparent);border-radius:4px;color:var(--vscode-input-foreground);background:var(--vscode-input-background);font:inherit}.field input::placeholder{color:var(--vscode-input-placeholderForeground)}
 .code-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.code-row button{white-space:nowrap;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground)}.agreement{display:flex;align-items:flex-start;gap:7px;margin:4px 0 12px;color:var(--vscode-descriptionForeground);font-size:12px}.agreement input{margin:3px 0 0;accent-color:var(--vscode-focusBorder)}.legal{min-height:auto;padding:0;border:0;color:var(--vscode-textLink-foreground);background:transparent;font-size:inherit}.legal:hover{text-decoration:underline}
 .verification{margin:10px 0;padding:10px;border:1px solid var(--vscode-inputValidation-warningBorder);border-radius:6px;background:var(--vscode-inputValidation-warningBackground);color:var(--vscode-inputValidation-warningForeground)}.verification strong{display:block;margin-bottom:4px}.verification button{margin-top:8px}.privacy-note{margin:10px 0 0;font-size:12px}.advanced{display:grid;gap:5px;margin-top:12px;padding-top:10px;border-top:1px solid var(--vscode-widget-border)}
@@ -235,9 +230,9 @@ button{min-height:36px;padding:7px 10px;border:1px solid transparent;border-radi
     <button id="phoneTab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="phonePanel" tabindex="-1">验证码登录</button>
   </div>
   <section id="qrPanel" role="tabpanel" aria-labelledby="qrTab">
-    <div id="intro"><p class="muted">二维码直接显示在侧边栏，使用番茄小说 App 扫码；官网认证页仅在屏幕外后台运行。</p></div>
+    <div id="intro"><p class="muted">二维码直接显示在侧边栏，使用番茄小说 App 扫码；Safari 还会显示官方二维码窗口作为扫描回退。</p></div>
     <div id="spinner" class="spinner"></div>
-    <div id="qrWrap" class="qr-wrap" hidden><img id="qr" class="qr" alt="使用番茄小说 App 扫描此二维码"><div id="status" class="status" role="status" aria-live="polite">等待扫码</div></div>
+    <div id="qrWrap" class="qr-wrap" hidden><div class="qr-frame"><img id="qr" class="qr" alt="使用番茄小说 App 扫描此二维码"></div><div id="status" class="status" role="status" aria-live="polite">等待扫码</div></div>
     <div id="message" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
     <div class="actions">
       <button id="start" class="primary" type="button">显示扫码二维码</button>
@@ -283,7 +278,7 @@ const vscode = acquireVsCodeApi();
 const byId=id=>document.getElementById(id);
 const intro=byId('intro'),spinner=byId('spinner'),qrWrap=byId('qrWrap'),qr=byId('qr'),status=byId('status'),message=byId('message'),start=byId('start'),cancel=byId('cancel');
 const qrTab=byId('qrTab'),phoneTab=byId('phoneTab'),qrPanel=byId('qrPanel'),phonePanel=byId('phonePanel'),phone=byId('phone'),smsCode=byId('smsCode'),agreement=byId('agreement'),sendSms=byId('sendSms'),phoneLogin=byId('phoneLogin'),phoneMessage=byId('phoneMessage'),verification=byId('verification'),openVerification=byId('openVerification');
-let countdownTimer,countdownSeconds=0,qrRunning=false,verificationBrowser='';
+let countdownTimer,countdownSeconds=0,qrRunning=false;
 function activateTab(name,focus=true){
   const phoneActive=name==='phone';qrTab.setAttribute('aria-selected',String(!phoneActive));phoneTab.setAttribute('aria-selected',String(phoneActive));qrTab.tabIndex=phoneActive?-1:0;phoneTab.tabIndex=phoneActive?0:-1;qrPanel.hidden=phoneActive;phonePanel.hidden=!phoneActive;if(focus)(phoneActive?phoneTab:qrTab).focus();
   if(phoneActive&&qrRunning)vscode.postMessage({type:'cancelQr'});
@@ -313,10 +308,10 @@ window.addEventListener('message',({data})=>{
   if(data.type==='phoneLoading'){setPhoneBusy(true,data.action);setPhoneMessage(data.message||'正在处理…')}
   if(data.type==='phoneStatus'){setPhoneMessage(data.message||'')}
   if(data.type==='smsSent'){setPhoneBusy(false);sendSms.textContent='获取验证码';verification.hidden=true;setPhoneMessage('验证码已发送至 '+data.phone+'，请查收短信。','success');startCountdown();smsCode.focus()}
-  if(data.type==='verificationRequired'){verificationBrowser=data.browser||'';setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';openVerification.disabled=false;verification.hidden=false;const safari=verificationBrowser==='safari';byId('verificationText').textContent=safari?'请在 Safari 中完成滑块安全验证，完成后插件会自动继续。':data.purpose==='sendSms'?'发送短信前需要完成番茄官方滑块验证。':'登录前需要完成番茄官方滑块验证。';openVerification.textContent=safari?'打开 Safari 验证窗口':'打开验证窗口';setPhoneMessage(safari?'检测到安全验证，请切换到 Safari 完成滑块。':'请打开官方验证窗口并手动完成验证。');openVerification.focus()}
-  if(data.type==='verificationOpening'){setPhoneBusy(true);openVerification.disabled=true;setPhoneMessage(verificationBrowser==='safari'?'Safari 验证窗口已打开，请完成滑块；完成后无需关闭 Safari。':'官方验证窗口已打开，完成滑块后会自动继续。')}
+  if(data.type==='verificationRequired'){setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';openVerification.disabled=false;verification.hidden=false;byId('verificationText').textContent=data.purpose==='sendSms'?'发送短信前需要完成番茄官方滑块验证。':'登录前需要完成番茄官方滑块验证。';setPhoneMessage('请打开官方验证窗口并手动完成验证。');openVerification.focus()}
+  if(data.type==='verificationOpening'){setPhoneBusy(true);openVerification.disabled=true;setPhoneMessage('官方验证窗口已打开，完成滑块后会自动继续。')}
   if(data.type==='phoneError'){setPhoneBusy(false);if(countdownSeconds===0)sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';openVerification.disabled=false;setPhoneMessage(data.message||'验证码登录失败。','error')}
-  if(data.type==='phoneIdle'){clearInterval(countdownTimer);countdownSeconds=0;verificationBrowser='';setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';openVerification.textContent='打开验证窗口';verification.hidden=true;smsCode.value='';setPhoneMessage('本次手机号登录已取消。')}
+  if(data.type==='phoneIdle'){clearInterval(countdownTimer);countdownSeconds=0;setPhoneBusy(false);sendSms.textContent='获取验证码';phoneLogin.textContent='登录 / 注册';verification.hidden=true;smsCode.value='';setPhoneMessage('本次手机号登录已取消。')}
   if(data.type==='success'){qrRunning=false;spinner.style.display='none';cancel.hidden=true;start.hidden=true;if(data.method==='phone'){setPhoneBusy(false);verification.hidden=true;phone.value='';smsCode.value='';setPhoneMessage('登录成功：'+data.name,'success')}else{status.textContent='登录成功：'+data.name}}
 });
 </script></body></html>`;
