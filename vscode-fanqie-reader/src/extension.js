@@ -6,6 +6,8 @@ const { LoginViewProvider } = require('./loginView');
 const { OfficialLogin } = require('./officialLogin');
 const { READER_VIEW_ID, ReaderPanel } = require('./readerPanel');
 
+const BOOK_METADATA_STATE_KEY = 'fanqieReader.bookMetadata';
+const BOOK_METADATA_CONCURRENCY = 3;
 let activeOfficialLogin;
 
 class ShelfProvider {
@@ -15,6 +17,7 @@ class ShelfProvider {
     this.events = new vscode.EventEmitter();
     this.onDidChangeTreeData = this.events.event;
     this.bookNodes = new Map();
+    this.hydratingBookIds = new Set();
   }
 
   refresh(element) {
@@ -44,7 +47,7 @@ class ShelfProvider {
 
   async #getRootItems() {
     const items = [
-      new ActionItem('打开书籍或章节…', 'book', 'fanqieReader.open'),
+      new ActionItem('通过 ID 或链接打开…', 'book', 'fanqieReader.open'),
     ];
     if (!(await this.client.hasCookie())) {
       return items;
@@ -64,12 +67,23 @@ class ShelfProvider {
         return items;
       }
       const history = this.context.globalState.get('fanqieReader.history', {});
+      const storedMetadata = this.context.globalState.get(BOOK_METADATA_STATE_KEY, {});
+      const missingMetadataIds = [];
       for (const id of bookIds) {
-        const cached = history[id];
-        const node = new BookItem(id, cached?.bookName, cached?.author, cached?.title);
+        const cachedHistory = history[id];
+        const cachedMetadata = storedMetadata[id] || {};
+        const node = new BookItem(id, {
+          name: cachedHistory?.bookName || cachedMetadata.name,
+          author: cachedHistory?.author || cachedMetadata.author,
+          chapterCount: cachedMetadata.chapterCount,
+        }, cachedHistory?.title);
         this.bookNodes.set(id, node);
         items.push(node);
+        if (!cachedMetadata.name) {
+          missingMetadataIds.push(id);
+        }
       }
+      void this.#hydrateBookMetadata(missingMetadataIds);
     } catch (error) {
       items.push(new MessageItem(error.message, 'warning'));
       items.push(new ActionItem('重新登录番茄小说', 'sign-in', 'fanqieReader.login'));
@@ -94,12 +108,49 @@ class ShelfProvider {
     }
   }
 
+  async #hydrateBookMetadata(bookIds) {
+    const pendingIds = bookIds.filter((id) => {
+      if (this.hydratingBookIds.has(id)) return false;
+      this.hydratingBookIds.add(id);
+      return true;
+    });
+    if (!pendingIds.length) return;
+
+    try {
+      const metadataRows = await this.client.getBookMetadataBatch(pendingIds, {
+        concurrency: BOOK_METADATA_CONCURRENCY,
+        onMetadata: (metadata) => {
+          const node = this.bookNodes.get(metadata.id);
+          if (node) {
+            node.applyMetadata(metadata);
+            this.events.fire(node);
+          }
+        },
+      });
+      if (metadataRows.length) {
+        const storedMetadata = {
+          ...this.context.globalState.get(BOOK_METADATA_STATE_KEY, {}),
+        };
+        const updatedAt = Date.now();
+        for (const metadata of metadataRows) {
+          storedMetadata[metadata.id] = { ...metadata, updatedAt };
+        }
+        await this.context.globalState.update(BOOK_METADATA_STATE_KEY, storedMetadata);
+      }
+    } catch {
+      // Individual failures leave an ID placeholder and can be retried by refresh.
+    } finally {
+      for (const id of pendingIds) {
+        this.hydratingBookIds.delete(id);
+      }
+    }
+  }
+
   updateProgress(bookId) {
     const node = this.bookNodes.get(bookId);
     const history = this.context.globalState.get('fanqieReader.history', {})[bookId];
     if (node && history) {
-      node.description = history.title;
-      node.tooltip = `${node.label}\n上次读到：${history.title}`;
+      node.applyProgress(history);
       this.events.fire(node);
     }
   }
@@ -132,14 +183,15 @@ class MessageItem extends vscode.TreeItem {
 }
 
 class BookItem extends vscode.TreeItem {
-  constructor(bookId, name, author, progressTitle) {
-    super(name || `书籍 ${bookId}`, vscode.TreeItemCollapsibleState.Collapsed);
+  constructor(bookId, metadata = {}, progressTitle = '') {
+    super(metadata.name || `书籍 ${bookId}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.bookId = bookId;
     this.book = undefined;
-    this.description = progressTitle || author || '';
-    this.tooltip = name
-      ? `${name}${author ? ` · ${author}` : ''}${progressTitle ? `\n上次读到：${progressTitle}` : ''}`
-      : `番茄书籍 ID：${bookId}\n展开后载入详情和目录`;
+    this.name = String(metadata.name || '');
+    this.author = String(metadata.author || '');
+    this.chapterCount = Number(metadata.chapterCount || 0);
+    this.progressTitle = String(progressTitle || '');
+    this.#updatePresentation();
     this.iconPath = new vscode.ThemeIcon('book');
     this.contextValue = 'fanqieBook';
     this.command = {
@@ -149,11 +201,35 @@ class BookItem extends vscode.TreeItem {
     };
   }
 
+  applyMetadata(metadata) {
+    this.name = String(metadata?.name || this.name || '');
+    this.author = String(metadata?.author || this.author || '');
+    this.chapterCount = Number(metadata?.chapterCount || this.chapterCount || 0);
+    this.#updatePresentation();
+  }
+
   applyBook(book) {
     this.book = book;
-    this.label = book.name;
-    this.description = book.author;
-    this.tooltip = `${book.name}${book.author ? ` · ${book.author}` : ''}\n${book.chapterCount} 章`;
+    this.applyMetadata(book);
+  }
+
+  applyProgress(history) {
+    this.progressTitle = String(history?.title || '');
+    this.name = String(history?.bookName || this.name || '');
+    this.author = String(history?.author || this.author || '');
+    this.#updatePresentation();
+  }
+
+  #updatePresentation() {
+    this.label = this.name || `书籍 ${this.bookId}`;
+    this.description = this.progressTitle || this.author || (this.name ? '' : '正在获取书名…');
+    if (!this.name) {
+      this.tooltip = `番茄书籍 ID：${this.bookId}\n正在后台载入书名和作者`;
+      return;
+    }
+    this.tooltip = `${this.name}${this.author ? ` · ${this.author}` : ''}` +
+      `${this.progressTitle ? `\n上次读到：${this.progressTitle}` : ''}` +
+      `${this.chapterCount ? `\n${this.chapterCount} 章` : ''}`;
   }
 }
 
@@ -314,6 +390,7 @@ async function activate(context) {
           return;
         }
         await client.clearCookie();
+        await context.globalState.update(BOOK_METADATA_STATE_KEY, undefined);
         loginViewProvider.cancel();
         await setLoggedIn(false);
         shelfProvider.refresh();
@@ -332,7 +409,7 @@ async function openFromInput(value, client, reader) {
   }
   if (!parsed) {
     const input = await vscode.window.showInputBox({
-      title: '打开番茄小说',
+      title: '通过 ID 或链接打开番茄小说',
       prompt: '输入书籍 ID、书籍详情页链接或章节阅读页链接。',
       placeHolder: 'https://fanqienovel.com/page/…',
       ignoreFocusOut: true,
@@ -372,4 +449,4 @@ async function deactivate() {
   activeOfficialLogin = undefined;
 }
 
-module.exports = { activate, deactivate };
+module.exports = { activate, deactivate, BookItem, ShelfProvider };

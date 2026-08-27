@@ -94,6 +94,76 @@ test('login stores the browser user agent and mirrors browser bookshelf headers'
   assert.equal(requests[1].options.headers.Accept, 'application/json, text/plain, */*');
 });
 
+test('book metadata resolves shelf labels without retaining the full catalog', async (t) => {
+  const originalFetch = global.fetch;
+  let requestCount = 0;
+  global.fetch = async () => {
+    requestCount += 1;
+    return new Response(
+      '<script>window.__INITIAL_STATE__=' + JSON.stringify({
+        page: {
+          bookId: '7636702239288986649',
+          bookName: '文字武侠',
+          authorName: '测试作者',
+          chapterTotal: 331,
+          chapterListWithVolume: [['large catalog omitted by metadata result']],
+        },
+      }) + ';</script>',
+      { status: 200 },
+    );
+  };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const client = new FanqieClient({});
+  const first = await client.getBookMetadata('7636702239288986649');
+  const second = await client.getBookMetadata('7636702239288986649');
+
+  assert.deepEqual(first, {
+    id: '7636702239288986649',
+    name: '文字武侠',
+    author: '测试作者',
+    chapterCount: 331,
+    lastChapterTitle: '',
+  });
+  assert.equal(second, first);
+  assert.equal(requestCount, 1);
+  assert.equal('volumes' in first, false);
+});
+
+test('book metadata hydration is concurrency limited and continues after failures', async () => {
+  const client = new FanqieClient({});
+  const ids = [
+    '7636702239288986649',
+    '7493943874184825918',
+    '7623686597409508376',
+    '7511906104662576153',
+    '7641906591557487640',
+  ];
+  let active = 0;
+  let maximumActive = 0;
+  const hydrated = [];
+  const failed = [];
+  client.getBookMetadata = async (id) => {
+    active += 1;
+    maximumActive = Math.max(maximumActive, active);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    active -= 1;
+    if (id === ids[2]) throw new Error('temporary failure');
+    return { id, name: `Book ${id}` };
+  };
+
+  const results = await client.getBookMetadataBatch(ids, {
+    concurrency: 2,
+    onMetadata: (metadata) => { hydrated.push(metadata.id); },
+    onError: (id) => { failed.push(id); },
+  });
+
+  assert.equal(maximumActive, 2);
+  assert.equal(results.length, 4);
+  assert.equal(hydrated.length, 4);
+  assert.deepEqual(failed, [ids[2]]);
+});
+
 test('extractChapterFont selects the reader regular woff2 font', () => {
   const html = [
     '<style>@font-face{font-family:abc123;font-display:block;',

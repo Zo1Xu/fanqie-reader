@@ -54,7 +54,7 @@
     "commands": [
       {
         "command": "fanqieReader.open",
-        "title": "番茄阅读：打开书籍或章节",
+        "title": "番茄阅读：通过 ID 或链接打开",
         "icon": "$(book)"
       },
       {

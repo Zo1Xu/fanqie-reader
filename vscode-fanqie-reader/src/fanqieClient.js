@@ -16,6 +16,7 @@ class FanqieClient {
   constructor(secretStorage) {
     this.secretStorage = secretStorage;
     this.bookCache = new Map();
+    this.bookMetadataCache = new Map();
     this.fontCache = new Map();
   }
 
@@ -48,6 +49,7 @@ class FanqieClient {
 
   clearCache() {
     this.bookCache.clear();
+    this.bookMetadataCache.clear();
   }
 
   async getUser() {
@@ -93,12 +95,7 @@ class FanqieClient {
       return this.bookCache.get(id);
     }
 
-    const html = await this.#getText(`/page/${id}`);
-    const state = parseInitialState(html);
-    const page = state.page;
-    if (!page?.bookId || !page?.bookName) {
-      throw new FanqieError('书籍详情页中没有找到可读取的数据。', 'BOOK_NOT_FOUND');
-    }
+    const page = await this.#getBookPage(id);
 
     const volumeNames = Array.isArray(page.volumeNameList) ? page.volumeNameList : [];
     const volumeRows = Array.isArray(page.chapterListWithVolume)
@@ -123,7 +120,57 @@ class FanqieClient {
       chapters: allChapters,
     };
     this.bookCache.set(id, book);
+    this.bookMetadataCache.set(id, toBookMetadata(book));
     return book;
+  }
+
+  async getBookMetadata(bookId, options = {}) {
+    const id = requireNumericId(bookId, '书籍 ID');
+    if (!options.refresh && this.bookMetadataCache.has(id)) {
+      return this.bookMetadataCache.get(id);
+    }
+    const cachedBook = this.bookCache.get(id);
+    if (!options.refresh && cachedBook) {
+      const metadata = toBookMetadata(cachedBook);
+      this.bookMetadataCache.set(id, metadata);
+      return metadata;
+    }
+
+    const page = await this.#getBookPage(id);
+    const metadata = {
+      id: String(page.bookId),
+      name: String(page.bookName),
+      author: String(page.authorName || page.author || ''),
+      chapterCount: Number(page.chapterTotal || 0),
+      lastChapterTitle: String(page.lastChapterTitle || ''),
+    };
+    this.bookMetadataCache.set(id, metadata);
+    return metadata;
+  }
+
+  async getBookMetadataBatch(bookIds, options = {}) {
+    const ids = [...new Set((bookIds || []).map((id) => String(id || '')).filter(Boolean))];
+    const concurrency = Math.max(1, Math.min(6, Number(options.concurrency) || 3));
+    const results = [];
+    let nextIndex = 0;
+
+    const worker = async () => {
+      while (nextIndex < ids.length) {
+        const id = ids[nextIndex];
+        nextIndex += 1;
+        try {
+          const metadata = await this.getBookMetadata(id, options);
+          results.push(metadata);
+          await options.onMetadata?.(metadata);
+        } catch (error) {
+          await options.onError?.(id, error);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()),
+    );
+    return results;
   }
 
   async getChapter(itemId) {
@@ -161,6 +208,15 @@ class FanqieClient {
       locked,
       fontDataUri,
     };
+  }
+
+  async #getBookPage(id) {
+    const html = await this.#getText(`/page/${id}`);
+    const page = parseInitialState(html).page;
+    if (!page?.bookId || !page?.bookName) {
+      throw new FanqieError('书籍详情页中没有找到可读取的数据。', 'BOOK_NOT_FOUND');
+    }
+    return page;
   }
 
   async #requireSession() {
@@ -314,6 +370,16 @@ function normalizeChapterSummary(chapter) {
       chapter?.isPaidPublication,
       chapter?.isPaidStory,
     ),
+  };
+}
+
+function toBookMetadata(book) {
+  return {
+    id: String(book?.id || ''),
+    name: String(book?.name || ''),
+    author: String(book?.author || ''),
+    chapterCount: Number(book?.chapterCount || 0),
+    lastChapterTitle: String(book?.lastChapterTitle || ''),
   };
 }
 
