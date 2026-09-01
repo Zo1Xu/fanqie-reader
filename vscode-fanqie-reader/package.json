@@ -215,7 +215,7 @@
   },
   "dependencies": {
     "playwright-core": "^1.62.1",
-    "selenium-webdriver": "^4.35.0"
+    "selenium-webdriver": "^4.48.0"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.6.2"
