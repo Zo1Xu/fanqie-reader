@@ -11,6 +11,8 @@ class LoginViewProvider {
     this.cancellation = undefined;
     this.running = false;
     this.phoneBusy = false;
+    this.qrSource = '';
+    this.qrPreview = undefined;
   }
 
   resolveWebviewView(view) {
@@ -22,6 +24,8 @@ class LoginViewProvider {
         await this.startQrLogin();
       } else if (message.type === 'cancelQr') {
         this.cancelQr();
+      } else if (message.type === 'openQrPreview') {
+        this.#showQrPreview(true);
       } else if (message.type === 'sendSms') {
         await this.sendSms(message);
       } else if (message.type === 'submitSmsCode') {
@@ -70,6 +74,8 @@ class LoginViewProvider {
     await this.officialLogin.cancelPhoneLogin();
     this.running = true;
     this.cancellation = { isCancellationRequested: false };
+    this.qrSource = '';
+    this.#disposeQrPreview();
     this.#post({ type: 'loading', message: '正在生成官方二维码…' });
     try {
       const browserPath = vscode.workspace
@@ -78,10 +84,14 @@ class LoginViewProvider {
       const user = await this.officialLogin.loginWithQr({
         browserPath,
         cancellationToken: this.cancellation,
-        onQrCode: (source) => this.#post({ type: 'qrCode', source }),
+        onQrCode: (source) => {
+          this.qrSource = source;
+          this.#post({ type: 'qrCode', source });
+        },
         onStatus: (message) => this.#post({ type: 'status', message }),
       });
       this.#post({ type: 'success', method: 'qr', name: user.name || '番茄小说账号' });
+      this.#disposeQrPreview();
       await this.callbacks.onLoggedIn?.(user);
     } catch (error) {
       if (error?.code !== 'LOGIN_CANCELLED') {
@@ -89,6 +99,7 @@ class LoginViewProvider {
       } else {
         this.#post({ type: 'idle' });
       }
+      this.#disposeQrPreview();
     } finally {
       this.running = false;
       this.cancellation = undefined;
@@ -190,6 +201,8 @@ class LoginViewProvider {
     if (this.cancellation) {
       this.cancellation.isCancellationRequested = true;
     }
+    this.qrSource = '';
+    this.#disposeQrPreview();
   }
 
   cancel() {
@@ -199,6 +212,39 @@ class LoginViewProvider {
 
   #post(message) {
     this.view?.webview.postMessage(message);
+  }
+
+  #showQrPreview(reveal) {
+    if (!isRasterDataUri(this.qrSource)) {
+      return;
+    }
+    if (this.qrPreview) {
+      this.qrPreview.webview.html = getQrPreviewHtml(this.qrSource);
+      if (reveal) {
+        this.qrPreview.reveal(vscode.ViewColumn.Active, true);
+      }
+      return;
+    }
+
+    const panel = vscode.window.createWebviewPanel(
+      'fanqieReader.qrPreview',
+      '番茄阅读：扫码登录',
+      vscode.ViewColumn.Active,
+      { enableScripts: true },
+    );
+    this.qrPreview = panel;
+    panel.webview.html = getQrPreviewHtml(this.qrSource);
+    panel.onDidDispose(() => {
+      if (this.qrPreview === panel) {
+        this.qrPreview = undefined;
+      }
+    });
+  }
+
+  #disposeQrPreview() {
+    const panel = this.qrPreview;
+    this.qrPreview = undefined;
+    panel?.dispose();
   }
 }
 
@@ -214,7 +260,7 @@ function getLoginHtml() {
 .brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}.tomato{width:28px;height:28px;flex:0 0 auto;overflow:visible}.title{font-size:15px;font-weight:600}.muted{color:var(--vscode-descriptionForeground)}
 .tabs{display:grid;grid-template-columns:1fr 1fr;margin:0 -4px 14px;border-bottom:1px solid var(--vscode-widget-border)}.tab{min-height:34px;padding:6px;border:0;border-bottom:2px solid transparent;border-radius:0;color:var(--vscode-descriptionForeground);background:transparent}.tab[aria-selected="true"]{border-bottom-color:var(--vscode-focusBorder);color:var(--vscode-foreground);font-weight:600}
 button{min-height:36px;padding:7px 10px;border:1px solid transparent;border-radius:5px;cursor:pointer;font:inherit}button:disabled{cursor:not-allowed;opacity:.6}button:focus-visible,input:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:2px}.primary{width:100%;color:var(--vscode-button-foreground);background:var(--vscode-button-background)}.primary:hover:not(:disabled){background:var(--vscode-button-hoverBackground)}.secondary{width:100%;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground)}.secondary:hover:not(:disabled){background:var(--vscode-button-secondaryHoverBackground)}.link{min-height:28px;padding:3px;color:var(--vscode-textLink-foreground);background:transparent}.link:hover{text-decoration:underline}
-.qr-wrap{text-align:center}.qr-frame{display:inline-block;max-width:100%;margin:12px auto;padding:12px;border-radius:4px;background:#fff;line-height:0}.qr{display:block;width:auto;height:auto;max-width:100%;margin:0;image-rendering:crisp-edges;image-rendering:pixelated}.status{min-height:20px;margin:8px 0;color:var(--vscode-descriptionForeground)}.error{color:var(--vscode-errorForeground)}.success{color:var(--vscode-testing-iconPassed)}
+.qr-wrap{text-align:center}.qr-frame{display:inline-block;max-width:100%;margin:12px auto;padding:16px;border-radius:4px;background:#fff;line-height:0}.qr{display:block;width:auto;height:auto;max-width:100%;margin:0;image-rendering:crisp-edges;image-rendering:pixelated}.qr-fallback{display:inline-block;margin:0 auto 4px}.status{min-height:20px;margin:8px 0;color:var(--vscode-descriptionForeground)}.error{color:var(--vscode-errorForeground)}.success{color:var(--vscode-testing-iconPassed)}
 .actions{display:grid;gap:8px;margin-top:12px}.field{display:grid;gap:5px;margin:0 0 12px}.field label{font-weight:600}.field input{width:100%;height:36px;padding:7px 9px;border:1px solid var(--vscode-input-border,transparent);border-radius:4px;color:var(--vscode-input-foreground);background:var(--vscode-input-background);font:inherit}.field input::placeholder{color:var(--vscode-input-placeholderForeground)}
 .code-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.code-row button{white-space:nowrap;color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground)}.agreement{display:flex;align-items:flex-start;gap:7px;margin:4px 0 12px;color:var(--vscode-descriptionForeground);font-size:12px}.agreement input{margin:3px 0 0;accent-color:var(--vscode-focusBorder)}.legal{min-height:auto;padding:0;border:0;color:var(--vscode-textLink-foreground);background:transparent;font-size:inherit}.legal:hover{text-decoration:underline}
 .verification{margin:10px 0;padding:10px;border:1px solid var(--vscode-inputValidation-warningBorder);border-radius:6px;background:var(--vscode-inputValidation-warningBackground);color:var(--vscode-inputValidation-warningForeground)}.verification strong{display:block;margin-bottom:4px}.verification button{margin-top:8px}.privacy-note{margin:10px 0 0;font-size:12px}.advanced{display:grid;gap:5px;margin-top:12px;padding-top:10px;border-top:1px solid var(--vscode-widget-border)}
@@ -230,9 +276,9 @@ button{min-height:36px;padding:7px 10px;border:1px solid transparent;border-radi
     <button id="phoneTab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="phonePanel" tabindex="-1">验证码登录</button>
   </div>
   <section id="qrPanel" role="tabpanel" aria-labelledby="qrTab">
-    <div id="intro"><p class="muted">二维码直接显示在侧边栏，使用番茄小说 App 扫码；Safari 还会显示官方二维码窗口作为扫描回退。</p></div>
+    <div id="intro"><p class="muted">二维码直接显示在侧边栏，请使用番茄小说 App 扫码；Safari 还会显示官方二维码窗口作为回退。</p></div>
     <div id="spinner" class="spinner"></div>
-    <div id="qrWrap" class="qr-wrap" hidden><div class="qr-frame"><img id="qr" class="qr" alt="使用番茄小说 App 扫描此二维码"></div><div id="status" class="status" role="status" aria-live="polite">等待扫码</div></div>
+    <div id="qrWrap" class="qr-wrap" hidden><div class="qr-frame"><img id="qr" class="qr" alt="使用番茄小说 App 扫描此二维码"></div><div id="status" class="status" role="status" aria-live="polite">等待扫码</div><button id="expandQr" class="link qr-fallback" type="button">扫描不成功？点击这里试试</button></div>
     <div id="message" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
     <div class="actions">
       <button id="start" class="primary" type="button">显示扫码二维码</button>
@@ -277,7 +323,7 @@ button{min-height:36px;padding:7px 10px;border:1px solid transparent;border-radi
 const vscode = acquireVsCodeApi();
 const byId=id=>document.getElementById(id);
 const intro=byId('intro'),spinner=byId('spinner'),qrWrap=byId('qrWrap'),qr=byId('qr'),status=byId('status'),message=byId('message'),start=byId('start'),cancel=byId('cancel');
-const qrTab=byId('qrTab'),phoneTab=byId('phoneTab'),qrPanel=byId('qrPanel'),phonePanel=byId('phonePanel'),phone=byId('phone'),smsCode=byId('smsCode'),agreement=byId('agreement'),sendSms=byId('sendSms'),phoneLogin=byId('phoneLogin'),phoneMessage=byId('phoneMessage'),verification=byId('verification'),openVerification=byId('openVerification');
+const qrTab=byId('qrTab'),phoneTab=byId('phoneTab'),qrPanel=byId('qrPanel'),phonePanel=byId('phonePanel'),expandQr=byId('expandQr'),phone=byId('phone'),smsCode=byId('smsCode'),agreement=byId('agreement'),sendSms=byId('sendSms'),phoneLogin=byId('phoneLogin'),phoneMessage=byId('phoneMessage'),verification=byId('verification'),openVerification=byId('openVerification');
 let countdownTimer,countdownSeconds=0,qrRunning=false;
 function activateTab(name,focus=true){
   const phoneActive=name==='phone';qrTab.setAttribute('aria-selected',String(!phoneActive));phoneTab.setAttribute('aria-selected',String(phoneActive));qrTab.tabIndex=phoneActive?-1:0;phoneTab.tabIndex=phoneActive?0:-1;qrPanel.hidden=phoneActive;phonePanel.hidden=!phoneActive;if(focus)(phoneActive?phoneTab:qrTab).focus();
@@ -292,6 +338,7 @@ function setPhoneBusy(busy,action){sendSms.disabled=busy||countdownSeconds>0;pho
 function startCountdown(){clearInterval(countdownTimer);countdownSeconds=60;sendSms.disabled=true;sendSms.textContent=countdownSeconds+' 秒后重试';countdownTimer=setInterval(()=>{countdownSeconds-=1;if(countdownSeconds<=0){countdownSeconds=0;clearInterval(countdownTimer);sendSms.disabled=false;sendSms.textContent='重新获取'}else sendSms.textContent=countdownSeconds+' 秒后重试'},1000)}
 start.addEventListener('click',()=>vscode.postMessage({type:'startQr'}));
 cancel.addEventListener('click',()=>vscode.postMessage({type:'cancelQr'}));
+expandQr.addEventListener('click',()=>vscode.postMessage({type:'openQrPreview'}));
 sendSms.addEventListener('click',()=>{const value=validatePhone();if(!value||!validateAgreement())return;verification.hidden=true;vscode.postMessage({type:'sendSms',phone:value,agreed:true})});
 byId('phoneForm').addEventListener('submit',event=>{event.preventDefault();const value=validatePhone();if(!value||!validateAgreement())return;if(!/^\\d{4}$/.test(smsCode.value.trim())){smsCode.setAttribute('aria-invalid','true');setPhoneMessage('请输入短信中的 4 位验证码。','error');smsCode.focus();return}smsCode.removeAttribute('aria-invalid');verification.hidden=true;vscode.postMessage({type:'submitSmsCode',code:smsCode.value.trim()})});
 openVerification.addEventListener('click',()=>vscode.postMessage({type:'openVerification'}));
@@ -317,6 +364,30 @@ window.addEventListener('message',({data})=>{
 </script></body></html>`;
 }
 
+function getQrPreviewHtml(source) {
+  if (!isRasterDataUri(source)) {
+    throw new TypeError('二维码必须是受支持的栅格图片。');
+  }
+  const nonce = getNonce();
+  return `<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+<style nonce="${nonce}">
+*{box-sizing:border-box}html,body{min-height:100%;margin:0;background:#fff;color:#111;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}body{display:grid;place-items:center;padding:32px}.preview{text-align:center}.qr-frame{display:inline-block;padding:24px;background:#fff;line-height:0}.qr{display:block;width:auto;height:auto;max-width:100%;image-rendering:crisp-edges;image-rendering:pixelated}.hint{margin:18px 0 0;font-size:15px;line-height:1.6}.hint strong{display:block;font-size:18px}
+</style></head><body>
+<main class="preview"><div class="qr-frame"><img id="qr" class="qr" src="${source}" alt="使用番茄小说 App 扫描此二维码"></div><p class="hint"><strong>请使用番茄小说 App 扫码</strong>保持手机镜头与屏幕平行；若有反光，可适当提高屏幕亮度。</p></main>
+<script nonce="${nonce}">
+const qr=document.getElementById('qr');
+function fitQr(){if(!qr.naturalWidth)return;const available=Math.max(160,Math.min(520,window.innerWidth-112,window.innerHeight-180));const integerScale=Math.max(1,Math.min(4,Math.floor(available/qr.naturalWidth)));qr.style.width=Math.min(available,qr.naturalWidth*integerScale)+'px';qr.style.height='auto'}
+qr.addEventListener('load',fitQr);window.addEventListener('resize',fitQr);if(qr.complete)fitQr();
+</script></body></html>`;
+}
+
+function isRasterDataUri(source) {
+  return /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(source || '');
+}
+
 function getNonce() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let value = '';
@@ -326,4 +397,4 @@ function getNonce() {
   return value;
 }
 
-module.exports = { LoginViewProvider, getLoginHtml };
+module.exports = { LoginViewProvider, getLoginHtml, getQrPreviewHtml, isRasterDataUri };

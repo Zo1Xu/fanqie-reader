@@ -29,7 +29,7 @@ async function launchSafariBrowser(options = {}) {
       pageLoad: options.navigationTimeout || 45_000,
       script: options.scriptTimeout || 45_000,
     });
-    return new SafariBrowser(driver, service);
+    return createWebDriverBrowser(driver, service, 'safari');
   } catch (error) {
     await driver?.quit().catch(() => {});
     await service.kill().catch(() => {});
@@ -37,14 +37,14 @@ async function launchSafariBrowser(options = {}) {
   }
 }
 
-class SafariBrowser {
-  constructor(driver, service) {
+class WebDriverBrowser {
+  constructor(driver, service, browserName) {
     this.driver = driver;
     this.service = service;
-    this.browserName = 'safari';
+    this.browserName = browserName;
     this.connected = true;
     this.listeners = new Set();
-    this.context = new SafariContext(this, driver);
+    this.context = new WebDriverContext(this, driver);
   }
 
   async newContext() {
@@ -65,7 +65,7 @@ class SafariBrowser {
     if (!this.connected) return;
     this.connected = false;
     await this.driver.quit().catch(() => {});
-    await this.service.kill().catch(() => {});
+    await this.service?.kill().catch(() => {});
     for (const listener of this.listeners) {
       listener();
     }
@@ -73,11 +73,11 @@ class SafariBrowser {
   }
 }
 
-class SafariContext {
+class WebDriverContext {
   constructor(browser, driver) {
     this.browser = browser;
     this.driver = driver;
-    this.page = new SafariPage(browser, driver);
+    this.page = new WebDriverPage(browser, driver);
   }
 
   async newPage() {
@@ -89,11 +89,11 @@ class SafariContext {
   }
 
   async newCDPSession() {
-    return new SafariWindowSession(this.driver);
+    return new WebDriverWindowSession(this.driver);
   }
 }
 
-class SafariWindowSession {
+class WebDriverWindowSession {
   constructor(driver) {
     this.driver = driver;
   }
@@ -124,7 +124,7 @@ class SafariWindowSession {
   }
 }
 
-class SafariPage {
+class WebDriverPage {
   constructor(browser, driver) {
     this.browser = browser;
     this.driver = driver;
@@ -157,7 +157,7 @@ class SafariPage {
   }
 
   locator(selector) {
-    return new SafariLocator(this.driver, By.css(selector));
+    return new WebDriverLocator(this.driver, By.css(selector));
   }
 
   getByText(text, options = {}) {
@@ -165,7 +165,7 @@ class SafariPage {
     const comparison = options.exact
       ? `normalize-space(.) = ${literal}`
       : `contains(normalize-space(.), ${literal})`;
-    return new SafariLocator(
+    return new WebDriverLocator(
       this.driver,
       By.xpath(`//*[${comparison} and not(.//*[${comparison}])]`),
     );
@@ -176,7 +176,7 @@ class SafariPage {
     const comparison = options.exact
       ? `@placeholder = ${literal}`
       : `contains(@placeholder, ${literal})`;
-    return new SafariLocator(this.driver, By.xpath(`//*[${comparison}]`));
+    return new WebDriverLocator(this.driver, By.xpath(`//*[${comparison}]`));
   }
 
   getByRole(role, options = {}) {
@@ -187,7 +187,7 @@ class SafariPage {
     const nameComparison = options.exact
       ? `normalize-space(.) = ${literal}`
       : `contains(normalize-space(.), ${literal})`;
-    return new SafariLocator(
+    return new WebDriverLocator(
       this.driver,
       By.xpath(`//*[${semanticRole} and ${nameComparison}]`),
     );
@@ -199,13 +199,13 @@ class SafariPage {
     await this.driver.wait(
       () => this.driver.executeScript(callback, ...args),
       timeout,
-      '等待 Safari 页面状态超时',
+      '等待浏览器页面状态超时',
       200,
     );
   }
 }
 
-class SafariLocator {
+class WebDriverLocator {
   constructor(driver, by, index = undefined) {
     this.driver = driver;
     this.by = by;
@@ -217,7 +217,7 @@ class SafariLocator {
   }
 
   nth(index) {
-    return new SafariLocator(this.driver, this.by, index);
+    return new WebDriverLocator(this.driver, this.by, index);
   }
 
   async waitFor(options = {}) {
@@ -227,7 +227,7 @@ class SafariLocator {
       const element = await this.#find();
       if (!element) return false;
       return visible ? element.isDisplayed().catch(() => false) : true;
-    }, timeout, '等待 Safari 页面元素超时', 200);
+    }, timeout, '等待浏览器页面元素超时', 200);
   }
 
   async evaluate(callback) {
@@ -278,10 +278,14 @@ class SafariLocator {
   async #requireElement() {
     const element = await this.#find();
     if (!element) {
-      throw new Error('Safari 页面中未找到目标元素。');
+      throw new Error('浏览器页面中未找到目标元素。');
     }
     return element;
   }
+}
+
+function createWebDriverBrowser(driver, service, browserName) {
+  return new WebDriverBrowser(driver, service, browserName);
 }
 
 function normalizeSafariDriverPath(executablePath) {
@@ -325,6 +329,7 @@ function toXPathLiteral(value) {
 module.exports = {
   DEFAULT_SAFARI_DRIVER,
   SAFARI_TECHNOLOGY_PREVIEW_DRIVER,
+  createWebDriverBrowser,
   enhanceSafariLaunchError,
   launchSafariBrowser,
   normalizeSafariDriverPath,

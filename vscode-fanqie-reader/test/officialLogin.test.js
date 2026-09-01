@@ -12,6 +12,7 @@ const {
   getBackgroundBrowserLaunchOptions,
   getBrowserNotFoundMessage,
   getBrowserUserAgent,
+  isFirefoxExecutable,
   isSafariExecutable,
   isValidPhone,
   isValidSmsCode,
@@ -192,6 +193,23 @@ test('findBrowserExecutable detects Chrome under LOCALAPPDATA on Windows', () =>
   assert.equal(result, expected);
 });
 
+test('findBrowserExecutable detects Brave and Firefox on Windows', () => {
+  const brave = 'C:\\Users\\demo\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe';
+  assert.equal(findBrowserExecutable({
+    platform: 'win32',
+    env: { LOCALAPPDATA: 'C:\\Users\\demo\\AppData\\Local' },
+    existsSync: (candidate) => candidate === brave,
+  }), brave);
+
+  const firefox = 'C:\\Program Files\\Mozilla Firefox\\firefox.exe';
+  assert.equal(findBrowserExecutable({
+    platform: 'win32',
+    env: { PROGRAMFILES: 'C:\\Program Files' },
+    existsSync: (candidate) => candidate === firefox,
+  }), firefox);
+  assert.equal(isFirefoxExecutable(firefox), true);
+});
+
 test('findBrowserExecutable detects Chrome in Applications on macOS', () => {
   const expected = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
   const result = findBrowserExecutable({
@@ -221,6 +239,18 @@ test('findBrowserExecutable accepts a macOS app bundle as the configured path', 
     existsSync: (candidate) => candidate === expected,
   });
   assert.equal(result, expected);
+});
+
+test('macOS Firefox app bundles resolve their lowercase executable name', () => {
+  const expected = '/Applications/Firefox Developer Edition.app/Contents/MacOS/firefox';
+  const result = findBrowserExecutable({
+    preferredPath: '/Applications/Firefox Developer Edition.app',
+    platform: 'darwin',
+    env: {},
+    existsSync: (candidate) => candidate === expected,
+  });
+  assert.equal(result, expected);
+  assert.equal(isFirefoxExecutable(result), true);
 });
 
 test('findBrowserExecutable expands a configured home-relative path on macOS', () => {
@@ -254,6 +284,20 @@ test('Safari is only advertised as a built-in browser on macOS', () => {
     ),
     true,
   );
+  assert.match(getBrowserNotFoundMessage('linux'), /Firefox/);
+});
+
+test('findBrowserExecutable detects mainstream Linux browser paths', () => {
+  assert.equal(findBrowserExecutable({
+    platform: 'linux',
+    env: {},
+    existsSync: (candidate) => candidate === '/usr/bin/vivaldi-stable',
+  }), '/usr/bin/vivaldi-stable');
+  assert.equal(findBrowserExecutable({
+    platform: 'linux',
+    env: {},
+    existsSync: (candidate) => candidate === '/snap/bin/firefox',
+  }), '/snap/bin/firefox');
 });
 
 test('phone login validates and masks ephemeral credentials', () => {

@@ -757,6 +757,14 @@ async function launchLoginBrowser(executablePath, options = {}) {
       scriptTimeout: LOGIN_UI_TIMEOUT_MS,
     });
   }
+  if (isFirefoxExecutable(executablePath)) {
+    const { launchFirefoxBrowser } = require('./firefoxBrowser');
+    return launchFirefoxBrowser({
+      executablePath,
+      navigationTimeout: LOGIN_NAVIGATION_TIMEOUT_MS,
+      scriptTimeout: LOGIN_UI_TIMEOUT_MS,
+    });
+  }
   return chromium.launch({ ...options, executablePath });
 }
 
@@ -766,10 +774,14 @@ function isSafariExecutable(executablePath) {
   );
 }
 
+function isFirefoxExecutable(executablePath) {
+  return /(?:^|[\\/])firefox(?:\.exe)?$/i.test(String(executablePath || ''));
+}
+
 function getBrowserNotFoundMessage(platform = process.platform) {
   return platform === 'darwin'
-    ? '未找到 Safari、Chrome、Edge 或 Chromium。请确认 Safari 可用，或在设置中填写 fanqieReader.browserPath。'
-    : '未找到 Chrome、Edge 或 Chromium。请安装其中一个浏览器，或在设置中填写 fanqieReader.browserPath。';
+    ? '未找到 Safari、Chrome、Edge、Brave、Vivaldi、Opera、Arc、Firefox 或 Chromium。请安装受支持的浏览器，或在设置中填写 fanqieReader.browserPath。'
+    : '未找到 Chrome、Edge、Brave、Vivaldi、Opera、Firefox 或 Chromium。请安装受支持的浏览器，或在设置中填写 fanqieReader.browserPath。';
 }
 
 async function hideBrowserWindow(context, page) {
@@ -881,7 +893,11 @@ function findBrowserExecutable(options = {}) {
   const env = options.env || process.env;
   const existsSync = options.existsSync || fs.existsSync;
   const preferredPath = String(
-    options.preferredPath || env.FANQIE_READER_BROWSER || env.CHROME_PATH || '',
+    options.preferredPath ||
+      env.FANQIE_READER_BROWSER ||
+      env.CHROME_PATH ||
+      env.FIREFOX_PATH ||
+      '',
   ).trim();
   const candidates = getPreferredBrowserCandidates(preferredPath, platform, env);
 
@@ -891,8 +907,26 @@ function findBrowserExecutable(options = {}) {
       if (!root) continue;
       candidates.push(
         joinWindowsPath(root, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        joinWindowsPath(root, 'Google', 'Chrome Beta', 'Application', 'chrome.exe'),
+        joinWindowsPath(root, 'Google', 'Chrome Dev', 'Application', 'chrome.exe'),
+        joinWindowsPath(root, 'Google', 'Chrome SxS', 'Application', 'chrome.exe'),
         joinWindowsPath(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        joinWindowsPath(root, 'Microsoft', 'Edge Beta', 'Application', 'msedge.exe'),
+        joinWindowsPath(root, 'Microsoft', 'Edge Dev', 'Application', 'msedge.exe'),
+        joinWindowsPath(root, 'Microsoft', 'Edge SxS', 'Application', 'msedge.exe'),
         joinWindowsPath(root, 'Chromium', 'Application', 'chrome.exe'),
+        joinWindowsPath(root, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+        joinWindowsPath(root, 'BraveSoftware', 'Brave-Browser-Beta', 'Application', 'brave.exe'),
+        joinWindowsPath(root, 'BraveSoftware', 'Brave-Browser-Nightly', 'Application', 'brave.exe'),
+        joinWindowsPath(root, 'Vivaldi', 'Application', 'vivaldi.exe'),
+        joinWindowsPath(root, 'Programs', 'Opera', 'opera.exe'),
+        joinWindowsPath(root, 'Opera', 'launcher.exe'),
+        joinWindowsPath(root, 'Programs', 'Opera GX', 'opera.exe'),
+        joinWindowsPath(root, 'Opera GX', 'launcher.exe'),
+        joinWindowsPath(root, 'Programs', 'Arc', 'Arc.exe'),
+        joinWindowsPath(root, 'Mozilla Firefox', 'firefox.exe'),
+        joinWindowsPath(root, 'Firefox Developer Edition', 'firefox.exe'),
+        joinWindowsPath(root, 'Firefox Nightly', 'firefox.exe'),
       );
     }
   } else if (platform === 'darwin') {
@@ -900,21 +934,31 @@ function findBrowserExecutable(options = {}) {
     if (env.HOME) {
       applicationRoots.push(path.posix.join(env.HOME, 'Applications'));
     }
-    const browserAppNames = [
-      'Google Chrome',
-      'Google Chrome Beta',
-      'Google Chrome Dev',
-      'Google Chrome Canary',
-      'Microsoft Edge',
-      'Microsoft Edge Beta',
-      'Microsoft Edge Dev',
-      'Microsoft Edge Canary',
-      'Chromium',
+    const browserApps = [
+      ['Google Chrome', 'Google Chrome'],
+      ['Google Chrome Beta', 'Google Chrome Beta'],
+      ['Google Chrome Dev', 'Google Chrome Dev'],
+      ['Google Chrome Canary', 'Google Chrome Canary'],
+      ['Microsoft Edge', 'Microsoft Edge'],
+      ['Microsoft Edge Beta', 'Microsoft Edge Beta'],
+      ['Microsoft Edge Dev', 'Microsoft Edge Dev'],
+      ['Microsoft Edge Canary', 'Microsoft Edge Canary'],
+      ['Chromium', 'Chromium'],
+      ['Brave Browser', 'Brave Browser'],
+      ['Brave Browser Beta', 'Brave Browser Beta'],
+      ['Brave Browser Nightly', 'Brave Browser Nightly'],
+      ['Vivaldi', 'Vivaldi'],
+      ['Opera', 'Opera'],
+      ['Opera GX', 'Opera'],
+      ['Arc', 'Arc'],
+      ['Firefox', 'firefox'],
+      ['Firefox Developer Edition', 'firefox'],
+      ['Firefox Nightly', 'firefox'],
     ];
     for (const root of applicationRoots) {
-      for (const appName of browserAppNames) {
+      for (const [appName, executableName] of browserApps) {
         candidates.push(
-          path.posix.join(root, `${appName}.app`, 'Contents', 'MacOS', appName),
+          path.posix.join(root, `${appName}.app`, 'Contents', 'MacOS', executableName),
         );
       }
     }
@@ -930,6 +974,17 @@ function findBrowserExecutable(options = {}) {
       '/usr/bin/microsoft-edge-stable',
       '/usr/bin/chromium',
       '/usr/bin/chromium-browser',
+      '/usr/bin/brave-browser',
+      '/usr/bin/brave-browser-beta',
+      '/usr/bin/brave-browser-nightly',
+      '/usr/bin/vivaldi',
+      '/usr/bin/vivaldi-stable',
+      '/usr/bin/opera',
+      '/usr/bin/firefox',
+      '/usr/bin/firefox-esr',
+      '/snap/bin/chromium',
+      '/snap/bin/brave',
+      '/snap/bin/firefox',
     );
   }
   return [...new Set(candidates)].find((candidate) => candidate && existsSync(candidate));
@@ -948,7 +1003,14 @@ function getPreferredBrowserCandidates(preferredPath, platform, env) {
   if (!normalizedPath.toLowerCase().endsWith('.app')) return [normalizedPath];
 
   const appName = path.posix.basename(normalizedPath, '.app');
-  return [path.posix.join(normalizedPath, 'Contents', 'MacOS', appName)];
+  const executableNames = {
+    'Firefox': ['firefox'],
+    'Firefox Developer Edition': ['firefox'],
+    'Firefox Nightly': ['firefox'],
+    'Opera GX': ['Opera'],
+  }[appName] || [appName];
+  return executableNames.map((executableName) =>
+    path.posix.join(normalizedPath, 'Contents', 'MacOS', executableName));
 }
 
 function delay(milliseconds) {
@@ -966,6 +1028,7 @@ module.exports = {
   getBackgroundBrowserLaunchOptions,
   getBrowserNotFoundMessage,
   getBrowserUserAgent,
+  isFirefoxExecutable,
   isSafariExecutable,
   isValidPhone,
   isValidSmsCode,

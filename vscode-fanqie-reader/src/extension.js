@@ -8,6 +8,8 @@ const { READER_VIEW_ID, ReaderPanel } = require('./readerPanel');
 
 const BOOK_METADATA_STATE_KEY = 'fanqieReader.bookMetadata';
 const BOOK_METADATA_CONCURRENCY = 3;
+const LEGACY_EXTENSION_ID = 'local.fanqie-reader';
+const CURRENT_EXTENSION_ACTIVE_CONTEXT = 'fanqieReader.currentExtensionActive';
 let activeOfficialLogin;
 
 class ShelfProvider {
@@ -260,6 +262,10 @@ class ChapterItem extends vscode.TreeItem {
 }
 
 async function activate(context) {
+  if (await guardAgainstLegacyInstallation()) {
+    return;
+  }
+
   const client = new FanqieClient(context.secrets);
   const officialLogin = new OfficialLogin(client);
   activeOfficialLogin = officialLogin;
@@ -282,7 +288,7 @@ async function activate(context) {
   await setLoggedIn(await client.hasCookie());
 
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('fanqieReader.shelf', shelfProvider),
+    createShelfTree(shelfProvider),
     vscode.window.registerWebviewViewProvider(
       READER_VIEW_ID,
       reader,
@@ -377,27 +383,78 @@ async function activate(context) {
     ),
     vscode.commands.registerCommand('fanqieReader.clearCookie', () =>
       runWithErrorHandling(async () => {
-        if (!(await client.hasCookie())) {
-          vscode.window.showInformationMessage('番茄阅读：当前未登录。');
+        const result = await runLogout({
+          client,
+          confirm: async () => {
+            const choice = await vscode.window.showWarningMessage(
+              '确定要退出番茄小说账号吗？本地阅读进度会保留。',
+              { modal: true },
+              '退出登录',
+            );
+            return choice === '退出登录';
+          },
+          onLoggedOut: async () => {
+            loginViewProvider.cancel();
+            await setLoggedIn(false);
+            shelfProvider.refresh();
+            await context.globalState.update(BOOK_METADATA_STATE_KEY, undefined);
+          },
+        });
+        if (!result.completed) {
           return;
         }
-        const choice = await vscode.window.showWarningMessage(
-          '确定要退出番茄小说账号吗？本地阅读进度会保留。',
-          { modal: true },
-          '退出登录',
+        vscode.window.showInformationMessage(
+          result.hadCookie
+            ? '番茄阅读：已退出登录。'
+            : '番茄阅读：登录状态已清理。',
         );
-        if (choice !== '退出登录') {
-          return;
-        }
-        await client.clearCookie();
-        await context.globalState.update(BOOK_METADATA_STATE_KEY, undefined);
-        loginViewProvider.cancel();
-        await setLoggedIn(false);
-        shelfProvider.refresh();
-        vscode.window.showInformationMessage('番茄阅读：已退出登录。');
       }),
     ),
   );
+}
+
+function createShelfTree(shelfProvider, api = vscode) {
+  return api.window.createTreeView('fanqieReader.shelf', {
+    treeDataProvider: shelfProvider,
+    showCollapseAll: true,
+  });
+}
+
+async function guardAgainstLegacyInstallation(api = vscode) {
+  const legacyExtension = api.extensions?.getExtension?.(LEGACY_EXTENSION_ID);
+  await api.commands.executeCommand(
+    'setContext',
+    CURRENT_EXTENSION_ACTIVE_CONTEXT,
+    !legacyExtension,
+  );
+  if (!legacyExtension) {
+    return false;
+  }
+
+  const action = await api.window.showWarningMessage(
+    '检测到旧测试版 local.fanqie-reader。它会与当前版重复注册侧栏按钮，并使登录数据分属两个扩展。请卸载旧测试版后重新加载窗口。',
+    '管理旧测试版',
+  );
+  if (action === '管理旧测试版') {
+    await api.commands.executeCommand(
+      'workbench.extensions.search',
+      `@id:${LEGACY_EXTENSION_ID}`,
+    );
+  }
+  return true;
+}
+
+async function runLogout({ client, confirm, onLoggedOut }) {
+  const hadCookie = await client.hasCookie();
+  if (hadCookie && !(await confirm())) {
+    return { completed: false, hadCookie: true };
+  }
+
+  // Clearing is intentionally idempotent: a stale tree can still look logged in
+  // after SecretStorage has already lost its cookie, so the UI must be reconciled.
+  await client.clearCookie();
+  await onLoggedOut();
+  return { completed: true, hadCookie };
 }
 
 async function openFromInput(value, client, reader) {
@@ -449,4 +506,12 @@ async function deactivate() {
   activeOfficialLogin = undefined;
 }
 
-module.exports = { activate, deactivate, BookItem, ShelfProvider };
+module.exports = {
+  activate,
+  deactivate,
+  BookItem,
+  ShelfProvider,
+  createShelfTree,
+  guardAgainstLegacyInstallation,
+  runLogout,
+};

@@ -9,6 +9,7 @@ const {
   normalizeSafariDriverPath,
   toXPathLiteral,
 } = require('../src/safariBrowser');
+const { enhanceFirefoxLaunchError } = require('../src/firefoxBrowser');
 
 test('Safari app and driver paths resolve to the built-in safaridriver', () => {
   assert.equal(
@@ -39,4 +40,13 @@ test('Safari remote automation errors include actionable setup instructions', ()
 test('XPath string literals preserve mixed quote characters', () => {
   const result = toXPathLiteral(`番茄's "Safari"`);
   assert.equal(result, `concat('番茄', "'", 's "Safari"')`);
+});
+
+test('Firefox driver failures explain Selenium Manager and geckodriver recovery', () => {
+  const result = enhanceFirefoxLaunchError(
+    new Error('Unable to obtain driver for firefox using Selenium Manager'),
+  );
+  assert.equal(result.code, 'FIREFOX_DRIVER_UNAVAILABLE');
+  assert.match(result.message, /Selenium Manager/);
+  assert.match(result.message, /geckodriver/);
 });

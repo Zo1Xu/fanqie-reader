@@ -18,7 +18,12 @@ Module._load = function patchedLoad(request, parent, isMain) {
   }
   return originalLoad.call(this, request, parent, isMain);
 };
-const { LoginViewProvider, getLoginHtml } = require('../src/loginView');
+const {
+  LoginViewProvider,
+  getLoginHtml,
+  getQrPreviewHtml,
+  isRasterDataUri,
+} = require('../src/loginView');
 Module._load = originalLoad;
 
 test('login sidebar uses a strict CSP and accessible live regions', () => {
@@ -37,7 +42,28 @@ test('login sidebar uses a strict CSP and accessible live regions', () => {
   assert.match(html, /Safari 还会显示官方二维码窗口/);
   assert.match(html, /class="qr-frame"/);
   assert.match(html, /\.qr\{display:block;width:auto;height:auto;max-width:100%/);
+  assert.match(html, /padding:16px/);
+  assert.match(html, /扫描不成功？点击这里试试/);
+  assert.match(html, /type:'openQrPreview'/);
   assert.doesNotMatch(html, /width:min\(190px,85%\)/);
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'loginView.js'),
+    'utf8',
+  );
+  assert.doesNotMatch(source, /#showQrPreview\(false\)/);
+});
+
+test('large QR preview preserves a white quiet zone and integer scaling', () => {
+  const source = 'data:image/png;base64,iVBORw0KGgo=';
+  const html = getQrPreviewHtml(source);
+  assert.equal(isRasterDataUri(source), true);
+  assert.equal(isRasterDataUri('data:image/svg+xml;base64,PHN2Zz4='), false);
+  assert.match(html, /default-src 'none'/);
+  assert.match(html, /background:#fff/);
+  assert.match(html, /padding:24px/);
+  assert.match(html, /Math\.floor\(available\/qr\.naturalWidth\)/);
+  assert.match(html, /image-rendering:pixelated/);
+  assert.match(html, /保持手机镜头与屏幕平行/);
 });
 
 test('login action opens the contributed sidebar container', async () => {
@@ -74,11 +100,16 @@ test('reader and shelf actions use distinct product icons', () => {
   assert.equal(icons.get('fanqieReader.refresh'), '$(sync)');
 
   const shelfTitleActions = manifest.contributes.menus['view/title']
-    .filter((item) => item.when === 'view == fanqieReader.shelf')
+    .filter((item) => item.when.includes('view == fanqieReader.shelf'))
     .map((item) => item.command);
   assert.deepEqual(shelfTitleActions, [
     'fanqieReader.open',
     'fanqieReader.refresh',
   ]);
   assert.equal(new Set(shelfTitleActions).size, shelfTitleActions.length);
+  assert.ok(
+    manifest.contributes.menus['view/title'].every(
+      (item) => item.when.includes('fanqieReader.currentExtensionActive'),
+    ),
+  );
 });

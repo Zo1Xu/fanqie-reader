@@ -11,8 +11,8 @@
 - 阅读区模拟终端输出，顶部提示符和三行 `[INFO]` 状态在滚动时固定。
 - 页面默认隐藏操作区；鼠标移到顶部或底部时显示章节控制。
 - `Alt+PageUp` / `Alt+PageDown` 切换上一章 / 下一章。
-- 支持番茄官网扫码、短信验证码和官方小窗口登录。
-- 登录后载入个人书架，后台限流补全并缓存书名与作者，支持按卷浏览目录和继续阅读。
+- 推荐使用番茄官网扫码登录，同时支持短信验证码和官方小窗口登录。
+- 登录后载入个人书架，后台限流补全并缓存书名与作者，支持按卷浏览目录、继续阅读和一键全部折叠。
 - 自动适配 VS Code 深色/浅色主题，可调整字号、行高和正文宽度。
 - 不绕过付费、锁定章节或账号权限。
 
@@ -28,23 +28,29 @@
 2. 在 VS Code 中运行 **Extensions: Install from VSIX...**。
 3. 选择下载的 VSIX，安装后按提示重新加载窗口。
 
+如果曾安装发布者为 `local` 的早期测试版，请先卸载 `local.fanqie-reader`，只保留发布者为 `Zo1Xu` 的版本。两个扩展 ID 同时存在会重复注册侧栏命令，并且登录数据无法互通。
+
 也可使用命令行：
 
 ```powershell
-code --install-extension .\fanqie-reader-v0.5.4.vsix
+code --install-extension .\fanqie-reader-v0.7.7.vsix
 ```
 
 ## 使用
 
 1. 在活动栏打开番茄图标。
 2. 未登录时可粘贴书籍 ID、详情页链接或章节链接直接阅读公开内容。
-3. 需要个人书架时，选择扫码登录或验证码登录。
+3. 需要个人书架时，优先选择扫码登录（推荐）；扫码不便时可改用短信验证码或官方小窗口登录。
 4. 选择书籍和章节后，底部 `fanqieReader` Panel 会自动打开。
 5. 使用目录、悬浮控制区或快捷键切换章节。
 
-扫码和侧边栏登录支持 Chrome、Edge、Chromium，以及 macOS 自带的 Safari。若 Chromium 浏览器位于自定义路径，请设置 `fanqieReader.browserPath`；macOS 可直接填写 `/Applications` 或 `~/Applications` 下的 `.app` 路径。
+> **推荐扫码登录：** 使用番茄小说 App 扫描二维码，无需在扩展中输入手机号、验证码或密码，登录流程更直接。
 
-仅使用 Safari 时，需要先允许 WebDriver 自动化：在 Safari 的“开发”菜单中打开“开发者设置”，勾选“允许远程自动化”；也可以在终端运行 `safaridriver --enable`。扩展使用 Safari 独立的临时自动化窗口，不读取日常浏览记录或已有 Cookie。Safari 扫码时会同时显示侧边栏二维码和官方 Safari 二维码窗口；若侧边栏识别困难，可直接扫描 Safari 窗口，但无需点击窗口。Safari 会阻止用户操作 WebDriver 自动化窗口，因此短信登录一旦触发手动滑块，扩展会结束该会话并提示改用扫码登录或 Chrome、Edge、Chromium；点击系统弹窗中的“Continue Session”只会继续自动化，不会允许手动拖动。
+扫码和侧边栏登录支持 Chrome、Edge、Brave、Vivaldi、Opera、Arc、Firefox、Chromium，以及 macOS 自带的 Safari，覆盖 Windows、macOS 和 Linux 常见安装位置。二维码默认只显示在侧边栏；若直接扫描不成功，可点击二维码下方的提示打开纯白大图页。若浏览器位于自定义路径，请设置 `fanqieReader.browserPath`；macOS 可直接填写 `/Applications` 或 `~/Applications` 下的 `.app` 路径。
+
+Firefox 使用隔离的 WebDriver 临时会话，不读取日常浏览数据。若系统尚未安装 `geckodriver`，首次使用时 Selenium Manager 会联网解析并缓存匹配版本；受代理或防火墙限制时，可自行安装 `geckodriver` 并加入 `PATH`。
+
+仅使用 Safari 时，需要先允许 WebDriver 自动化：在 Safari 的“开发”菜单中打开“开发者设置”，勾选“允许远程自动化”；也可以在终端运行 `safaridriver --enable`。扩展使用 Safari 独立的临时自动化窗口，不读取日常浏览记录或已有 Cookie。Safari 扫码时会同时显示侧边栏二维码和官方 Safari 二维码窗口；若侧边栏识别困难，可直接扫描 Safari 窗口，但无需点击窗口。Safari 会阻止用户操作 WebDriver 自动化窗口，因此短信登录一旦触发手动滑块，扩展会结束该会话并提示改用扫码登录、Chromium 系浏览器或 Firefox；点击系统弹窗中的“Continue Session”只会继续自动化，不会允许手动拖动。
 
 ## 登录与数据
 
@@ -65,7 +71,7 @@ code --install-extension .\fanqie-reader-v0.5.4.vsix
 | `fanqieReader.fontSize` | `14` | 阅读区字号（像素） |
 | `fanqieReader.lineHeight` | `1.6` | 阅读区行高 |
 | `fanqieReader.contentWidth` | `760` | 正文最大宽度（像素） |
-| `fanqieReader.browserPath` | 空 | 自定义浏览器路径；macOS 自动支持 Safari，并接受 `.app` 路径 |
+| `fanqieReader.browserPath` | 空 | 自定义受支持浏览器路径；macOS 自动支持 Safari，并接受 `.app` 路径 |
 
 ## 常用命令
 
@@ -81,7 +87,7 @@ code --install-extension .\fanqie-reader-v0.5.4.vsix
 ## 已知限制
 
 - 网页结构或接口变化可能导致功能失效。
-- 密码输入和交互式风控必须在番茄官方窗口中完成；Safari 无法手动操作 WebDriver 窗口中的滑块，此时请使用扫码登录或 Chromium 浏览器。
+- 密码输入和交互式风控必须在番茄官方窗口中完成；Safari 无法手动操作 WebDriver 窗口中的滑块，此时请使用扫码登录、Chromium 系浏览器或 Firefox。
 - 首个公开版本不把进度同步回番茄账号。
 - 请遵守番茄小说服务条款和内容版权要求，不要用于批量抓取或内容再分发。
 
