@@ -24,10 +24,6 @@ fanqieReader 是在用户本机运行的非官方 VS Code 扩展。本项目不�
 
 在侧边栏执行“退出登录”会清除扩展保存的登录 Cookie 和书架元数据缓存，但保留本地阅读进度。需要彻底清理扩展本地状态时，可先退出登录，再卸载扩展并删除对应的 VS Code 扩展存储数据。
 
-## 抓包工具
-
-`fanqie-api-capture` 是仅供本地研究的开发工具。其 `output/` 目录可能保存完整 Cookie、Session、CSRF Token、用户 ID、请求响应正文和阅读数据。该目录已被 Git 忽略；请勿上传、分享或附加到公开 Issue。
-
 ## 联系
 
 隐私问题请通过 GitHub Issue 提交，但不要附带任何账号凭据或个人数据。敏感安全问题请遵循 [SECURITY.md](SECURITY.md)。
