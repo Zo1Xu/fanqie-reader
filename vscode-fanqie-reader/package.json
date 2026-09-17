@@ -234,7 +234,7 @@
   },
   "dependencies": {
     "htmlparser2": "10.1.0",
-    "playwright-core": "^1.62.1",
+    "playwright-core": "^1.63.0",
     "selenium-webdriver": "^4.35.0"
   },
   "devDependencies": {
