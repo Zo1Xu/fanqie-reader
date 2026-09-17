@@ -13,6 +13,13 @@ coverage/
 Thumbs.db
 
 # Local configuration and credentials
+.analysis/
+vscode-fanqie-reader/runtime/jre/
+vscode-fanqie-reader/runtime/lib/
+vscode-fanqie-reader/runtime/classes/
+vscode-fanqie-reader/runtime/manifest.json
+vscode-fanqie-reader/runtime-src/target/
+vscode-fanqie-reader/runtime-src/classpath.txt
 .env
 .env.*
 !.env.example

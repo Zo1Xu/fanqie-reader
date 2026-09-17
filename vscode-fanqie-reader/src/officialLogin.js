@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright-core');
 
 const BASE_URL = 'https://fanqienovel.com';
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -765,6 +764,8 @@ async function launchLoginBrowser(executablePath, options = {}) {
       scriptTimeout: LOGIN_UI_TIMEOUT_MS,
     });
   }
+  // Guest reading does not load browser automation or start a browser process.
+  const { chromium } = require('playwright-core');
   return chromium.launch({ ...options, executablePath });
 }
 

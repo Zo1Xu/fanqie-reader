@@ -2,7 +2,7 @@
   "name": "fanqie-reader",
   "displayName": "番茄阅读",
   "description": "在 VS Code 侧边栏中浏览番茄小说书架，并在底部 Panel 阅读章节。",
-  "version": "0.7.7",
+  "version": "0.7.11",
   "publisher": "Zo1Xu",
   "private": true,
   "license": "AGPL-3.0-only",
@@ -47,11 +47,16 @@
     "onCommand:fanqieReader.loginInBrowser",
     "onCommand:fanqieReader.setCookie",
     "onCommand:fanqieReader.clearCookie",
-    "onCommand:fanqieReader.refresh"
+    "onCommand:fanqieReader.refresh",
+    "onCommand:fanqieReader.copyReadingDiagnostics"
   ],
   "main": "./src/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "fanqieReader.copyReadingDiagnostics",
+        "title": "番茄阅读：复制阅读诊断"
+      },
       {
         "command": "fanqieReader.open",
         "title": "番茄阅读：通过 ID 或链接打开",
@@ -69,11 +74,15 @@
       },
       {
         "command": "fanqieReader.previousChapter",
-        "title": "番茄阅读：上一章"
+        "title": "番茄阅读：上一章",
+        "icon": "$(arrow-left)",
+        "enablement": "fanqieReader.hasPreviousChapter"
       },
       {
         "command": "fanqieReader.nextChapter",
-        "title": "番茄阅读：下一章"
+        "title": "番茄阅读：下一章",
+        "icon": "$(arrow-right)",
+        "enablement": "fanqieReader.hasNextChapter"
       },
       {
         "command": "fanqieReader.login",
@@ -121,7 +130,7 @@
           "id": "fanqieReader.loginView",
           "name": "账号登录",
           "type": "webview",
-          "when": "!fanqieReader.loggedIn"
+          "when": "fanqieReader.loginRequested"
         },
         {
           "id": "fanqieReader.shelf",
@@ -160,6 +169,16 @@
         {
           "command": "fanqieReader.refresh",
           "when": "view == fanqieReader.shelf && fanqieReader.currentExtensionActive",
+          "group": "navigation@2"
+        },
+        {
+          "command": "fanqieReader.previousChapter",
+          "when": "view == fanqieReader.readerView && fanqieReader.currentExtensionActive",
+          "group": "navigation@1"
+        },
+        {
+          "command": "fanqieReader.nextChapter",
+          "when": "view == fanqieReader.readerView && fanqieReader.currentExtensionActive",
           "group": "navigation@2"
         }
       ],
@@ -211,9 +230,10 @@
     "vscode:prepublish": "npm run verify",
     "package": "vsce package",
     "release:check": "node scripts/release-check.js",
-    "package:release": "npm run release:check && vsce package"
+    "package:release": "npm run release:check && npm run package --"
   },
   "dependencies": {
+    "htmlparser2": "10.1.0",
     "playwright-core": "^1.62.1",
     "selenium-webdriver": "^4.35.0"
   },

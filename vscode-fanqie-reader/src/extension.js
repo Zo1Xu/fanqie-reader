@@ -11,6 +11,7 @@ const BOOK_METADATA_CONCURRENCY = 3;
 const LEGACY_EXTENSION_ID = 'local.fanqie-reader';
 const CURRENT_EXTENSION_ACTIVE_CONTEXT = 'fanqieReader.currentExtensionActive';
 let activeOfficialLogin;
+let activeClient;
 
 class ShelfProvider {
   constructor(context, client) {
@@ -20,12 +21,24 @@ class ShelfProvider {
     this.onDidChangeTreeData = this.events.event;
     this.bookNodes = new Map();
     this.hydratingBookIds = new Set();
+    this.chapterNodes = new Map();
+    this.chapterSubscription = client.onChapterStateChanged?.(state => {
+      for (const node of this.chapterNodes.values()) {
+        if (node.bookId === state.bookId) {
+          node.applyReadState(this.client.getChapterState(node.chapter.id));
+          this.events.fire(node);
+        }
+      }
+    });
   }
+
+  dispose() { this.chapterSubscription?.dispose(); this.events.dispose?.(); }
 
   refresh(element) {
     if (!element) {
       this.client.clearCache();
       this.bookNodes.clear();
+      this.chapterNodes.clear();
     }
     this.events.fire(element);
   }
@@ -39,7 +52,11 @@ class ShelfProvider {
       return this.#getBookVolumes(element);
     }
     if (element instanceof VolumeItem) {
-      return element.chapters.map((chapter) => new ChapterItem(chapter));
+      return element.chapters.map(chapter => {
+        const node = new ChapterItem(chapter, element.book.id, this.client.getChapterState?.(chapter.id));
+        this.chapterNodes.set(chapter.id, node);
+        return node;
+      });
     }
     if (element) {
       return [];
@@ -51,7 +68,8 @@ class ShelfProvider {
     const items = [
       new ActionItem('通过 ID 或链接打开…', 'book', 'fanqieReader.open'),
     ];
-    if (!(await this.client.hasCookie())) {
+    if (!(await this.client.hasCookie().catch(() => false))) {
+      items.push(new ActionItem('登录并同步书架', 'sign-in', 'fanqieReader.login'));
       return items;
     }
 
@@ -247,17 +265,25 @@ class VolumeItem extends vscode.TreeItem {
 }
 
 class ChapterItem extends vscode.TreeItem {
-  constructor(chapter) {
+  constructor(chapter, bookId, state) {
     super(chapter.title, vscode.TreeItemCollapsibleState.None);
     this.chapter = chapter;
-    this.description = chapter.locked ? '已锁定' : '';
-    this.iconPath = new vscode.ThemeIcon(chapter.locked ? 'lock' : 'file-text');
+    this.bookId = bookId;
+    this.id = `chapter:${bookId}:${chapter.id}`;
+    this.applyReadState(state);
     this.contextValue = 'fanqieChapter';
     this.command = {
       command: 'fanqieReader.openChapter',
       title: '阅读章节',
       arguments: [chapter.id],
     };
+  }
+
+  applyReadState(state) {
+    const status = state?.status;
+    this.description = status === 'login' ? '需登录' : status === 'restricted' ? '阅读受限' : status === 'error' ? '暂不可用' : '';
+    this.iconPath = new vscode.ThemeIcon(status === 'login' || status === 'restricted' ? 'lock' : status === 'error' ? 'warning' : 'file-text');
+    this.tooltip = `${this.chapter.title}\n${state?.reason || (status === 'readable' ? '已读取完整正文' : '点击读取正文')}`;
   }
 }
 
@@ -267,6 +293,8 @@ async function activate(context) {
   }
 
   const client = new FanqieClient(context.secrets);
+  activeClient = client;
+  context.subscriptions.push({ dispose: () => client.dispose() });
   const officialLogin = new OfficialLogin(client);
   activeOfficialLogin = officialLogin;
   let shelfProvider;
@@ -274,18 +302,25 @@ async function activate(context) {
     shelfProvider?.updateProgress(bookId);
   });
   shelfProvider = new ShelfProvider(context, client);
-  const setLoggedIn = (value) =>
-    vscode.commands.executeCommand('setContext', 'fanqieReader.loggedIn', Boolean(value));
+  context.subscriptions.push(shelfProvider);
+  const setLoggedIn = async (value) => {
+    await vscode.commands.executeCommand('setContext', 'fanqieReader.loggedIn', Boolean(value));
+    await vscode.commands.executeCommand('setContext', 'fanqieReader.loginRequested', false);
+  };
+  const onLoggedIn = async (user) => {
+    await setLoggedIn(true);
+    shelfProvider.refresh();
+    vscode.window.showInformationMessage(
+      `番茄阅读：已登录 ${user.name || '番茄小说账号'}，书架正在刷新。`,
+    );
+    // Reading failure must not turn a successful account login into a login error.
+    void runWithErrorHandling(() => reader.retryRestrictedChapter());
+  };
   const loginViewProvider = new LoginViewProvider(context, officialLogin, {
-    onLoggedIn: async (user) => {
-      await setLoggedIn(true);
-      shelfProvider.refresh();
-      vscode.window.showInformationMessage(
-        `番茄阅读：已登录 ${user.name || '番茄小说账号'}，书架正在刷新。`,
-      );
-    },
+    onLoggedIn,
+    onDismiss: () => vscode.commands.executeCommand('setContext', 'fanqieReader.loginRequested', false),
   });
-  await setLoggedIn(await client.hasCookie());
+  await setLoggedIn(await client.hasCookie().catch(() => false));
 
   context.subscriptions.push(
     createShelfTree(shelfProvider),
@@ -300,6 +335,13 @@ async function activate(context) {
       { webviewOptions: { retainContextWhenHidden: true } },
     ),
     vscode.commands.registerCommand('fanqieReader.refresh', () => shelfProvider.refresh()),
+    vscode.commands.registerCommand('fanqieReader.copyReadingDiagnostics', () =>
+      runWithErrorHandling(async () => {
+        await vscode.env.clipboard.writeText(JSON.stringify({ extensionVersion: context.extension?.packageJSON?.version,
+          ...client.getReadingDiagnostics() }, null, 2));
+        vscode.window.showInformationMessage('番茄阅读：诊断已复制，不包含账号、Cookie、设备标识或正文。');
+      }),
+    ),
     vscode.commands.registerCommand('fanqieReader.openChapter', (itemId) =>
       runWithErrorHandling(() => reader.openChapter(itemId)),
     ),
@@ -330,7 +372,7 @@ async function activate(context) {
     ),
     vscode.commands.registerCommand('fanqieReader.login', () =>
       runWithErrorHandling(async () => {
-        await setLoggedIn(false);
+        await vscode.commands.executeCommand('setContext', 'fanqieReader.loginRequested', true);
         await loginViewProvider.focus();
       }),
     ),
@@ -353,11 +395,7 @@ async function activate(context) {
               onStatus: (message) => progress.report({ message }),
             }),
         );
-        vscode.window.showInformationMessage(
-          `番茄阅读：已登录 ${user.name || '番茄小说账号'}，书架正在刷新。`,
-        );
-        await setLoggedIn(true);
-        shelfProvider.refresh();
+        await onLoggedIn(user);
       }),
     ),
     vscode.commands.registerCommand('fanqieReader.setCookie', () =>
@@ -376,9 +414,7 @@ async function activate(context) {
           { location: vscode.ProgressLocation.Notification, title: '正在验证番茄小说登录状态…' },
           () => client.saveCookie(value),
         );
-        vscode.window.showInformationMessage(`番茄阅读：已登录 ${user.name || '番茄小说账号'}`);
-        await setLoggedIn(true);
-        shelfProvider.refresh();
+        await onLoggedIn(user);
       }),
     ),
     vscode.commands.registerCommand('fanqieReader.clearCookie', () =>
@@ -502,6 +538,8 @@ async function runWithErrorHandling(task) {
 }
 
 async function deactivate() {
+  activeClient?.dispose();
+  activeClient = undefined;
   await activeOfficialLogin?.cancelPhoneLogin();
   activeOfficialLogin = undefined;
 }

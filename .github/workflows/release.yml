@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: vscode-fanqie-reader
@@ -36,10 +36,18 @@ jobs:
         run: npm run verify
 
       - name: Package VSIX
-        run: npm run package -- --out "../fanqie-reader-${GITHUB_REF_NAME}.vsix"
+        run: npm run package -- --out "../fanqie-reader-$env:GITHUB_REF_NAME.vsix"
 
       - name: Create GitHub Release
         working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "fanqie-reader-${GITHUB_REF_NAME}.vsix" --verify-tag --generate-notes --title "fanqieReader ${GITHUB_REF_NAME}"
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          $changelog = Get-Content -Raw -Encoding utf8 'vscode-fanqie-reader/CHANGELOG.md'
+          $pattern = '(?ms)^## \[' + [regex]::Escape($version) + '\][^\r\n]*\r?\n(.*?)(?=^## |\z)'
+          $notes = [regex]::Match($changelog, $pattern).Groups[1].Value.Trim()
+          if (!$notes) { throw "Missing release notes for $version" }
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          ($notes -replace '(?m)^- ', '') | Set-Content -Encoding utf8 -LiteralPath $notesPath
+          gh release create "$env:GITHUB_REF_NAME" "fanqie-reader-$env:GITHUB_REF_NAME.vsix" --verify-tag --notes-file "$notesPath" --title "fanqieReader $env:GITHUB_REF_NAME"

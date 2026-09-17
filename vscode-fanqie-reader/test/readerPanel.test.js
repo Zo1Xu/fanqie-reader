@@ -37,6 +37,28 @@ test('sanitizeChapterContent preserves paragraphs and removes executable markup'
   assert.equal(result.includes('<p>alert(1)第二段<br>换行</p>'), true);
 });
 
+test('web-locked preview is not presented as full content or an App purchase requirement', () => {
+  const html = getChapterHtml({}, {
+    id: '7175147347041911356', bookId: '7143038691944959011',
+    bookName: '十日终焉', title: '第11章 继续吧', order: 11,
+    locked: true, content: '<p>TEST_PREVIEW_ONLY</p>', fontDataUri: '',
+  });
+  assert.match(html, /当前网页未提供完整正文/);
+  assert.match(html, /网页阅读权限/);
+  assert.doesNotMatch(html, /TEST_PREVIEW_ONLY|需要在番茄小说中解锁后阅读/);
+});
+
+test('web failure UI explains the actual state and offers the appropriate explicit action', () => {
+  const base = { locked: true, content: 'PREVIEW', restrictionReason: '请求失败 <unsafe>', bookName: '合成', title: '章节' };
+  const retry = getChapterHtml({}, { ...base, retryable: true });
+  assert.match(retry, /请求失败 &lt;unsafe&gt;/);
+  assert.match(retry, /data-action="retry"/);
+  assert.doesNotMatch(retry, /data-action="login"|PREVIEW|当前网页未提供/);
+  const login = getChapterHtml({}, { ...base, loginRequired: true });
+  assert.match(login, /data-action="login"/);
+  assert.doesNotMatch(login, /data-action="retry"/);
+});
+
 test('reader is contributed as a bottom panel Webview view', () => {
   const manifest = require('../package.json');
   assert.equal(READER_VIEW_ID, 'fanqieReader.readerView');
@@ -55,6 +77,12 @@ test('reader is contributed as a bottom panel Webview view', () => {
     manifest.contributes.views.fanqieReaderPanel[0].type,
     'webview',
   );
+  for (const name of ['previousChapter', 'nextChapter']) {
+    const id = `fanqieReader.${name}`;
+    assert.ok(manifest.contributes.menus['view/title'].some(item => item.command === id
+      && item.when.includes('view == fanqieReader.readerView')));
+    assert.ok(manifest.contributes.commands.find(item => item.command === id).icon);
+  }
 });
 
 test('chapter HTML uses terminal colors and accessible navigation', () => {
@@ -95,7 +123,9 @@ test('chapter HTML uses terminal colors and accessible navigation', () => {
   assert.match(html, /Alt\+PageUp/);
   assert.match(html, /第 37 章/);
   assert.match(html, /\.toolbar\{[^}]*opacity:0/);
-  assert.match(html, /\.footer-nav\{[^}]*opacity:0/);
+  assert.match(html, /\.footer-nav\{[^}]*opacity:1/);
+  assert.match(html, /aria-label="上一章">← 上一章/);
+  assert.match(html, /aria-label="下一章">下一章 →/);
   assert.doesNotMatch(html, /<h1>/);
   assert.doesNotMatch(html, /text-indent:2em/);
   assert.match(html, /prefers-reduced-motion:reduce/);

@@ -3,6 +3,11 @@
 .gitignore
 test/**
 scripts/**
+runtime-src/**
+runtime/**
+src/mobileClient.js
+src/mobileRuntime.js
+THIRD_PARTY_NOTICES.md
 docs/**
 resources/icon-source.svg
 *.vsix

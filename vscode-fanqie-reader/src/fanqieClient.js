@@ -15,9 +15,12 @@ class FanqieError extends Error {
 class FanqieClient {
   constructor(secretStorage) {
     this.secretStorage = secretStorage;
+    this.readingDiagnostics = [];
     this.bookCache = new Map();
     this.bookMetadataCache = new Map();
     this.fontCache = new Map();
+    this.chapterStates = new Map();
+    this.chapterListeners = new Set();
   }
 
   async hasCookie() {
@@ -41,6 +44,9 @@ class FanqieClient {
   }
 
   async clearCookie() {
+    const books = new Set([...this.chapterStates.values()].map(state => state.bookId));
+    this.chapterStates.clear();
+    for (const bookId of books) this.#notifyChapterState({ bookId });
     await Promise.all([
       this.secretStorage.delete(COOKIE_SECRET_KEY),
       this.secretStorage.delete(USER_AGENT_SECRET_KEY),
@@ -50,6 +56,27 @@ class FanqieClient {
   clearCache() {
     this.bookCache.clear();
     this.bookMetadataCache.clear();
+  }
+
+  dispose() {
+    this.readingDiagnostics.length = 0;
+    this.chapterListeners.clear();
+  }
+
+  onChapterStateChanged(listener) {
+    this.chapterListeners.add(listener);
+    return { dispose: () => this.chapterListeners.delete(listener) };
+  }
+
+  getChapterState(itemId) { return this.chapterStates.get(String(itemId)); }
+
+  getReadingDiagnostics() {
+    return { source: 'web', platform: `${process.platform}-${process.arch}`,
+      requests: this.readingDiagnostics.map(row => ({ ...row })) };
+  }
+
+  #notifyChapterState(state) {
+    for (const listener of this.chapterListeners) listener(state);
   }
 
   async getUser() {
@@ -174,11 +201,83 @@ class FanqieClient {
   }
 
   async getChapter(itemId) {
+    let chapter = await this.#readChapter(itemId);
+    chapter = await this.#completeNavigation(chapter);
+    const status = !chapter.locked ? 'readable' : chapter.loginRequired ? 'login'
+      : chapter.errorCode ? 'error' : 'restricted';
+    const state = { id: chapter.id, bookId: chapter.bookId, status, reason: chapter.restrictionReason || '' };
+    this.chapterStates.delete(chapter.id);
+    this.chapterStates.set(chapter.id, state);
+    if (this.chapterStates.size > 500) this.chapterStates.delete(this.chapterStates.keys().next().value);
+    this.#notifyChapterState(state);
+    return chapter;
+  }
+
+  async #completeNavigation(chapter) {
+    const neighbor = value => /^[1-9][0-9]*$/.test(value || '') && value !== chapter.id ? value : '';
+    let result = { ...chapter, previousItemId: neighbor(chapter.previousItemId), nextItemId: neighbor(chapter.nextItemId) };
+    if (!chapter.bookId) return result;
+    let book = this.bookCache.get(chapter.bookId);
+    if (!book && (!result.previousItemId || !result.nextItemId || !result.order)) {
+      try { book = await this.getBook(chapter.bookId); } catch { return result; }
+    }
+    const index = book?.chapters.findIndex(row => row.id === chapter.id) ?? -1;
+    if (index >= 0) result = { ...result, previousItemId: book.chapters[index - 1]?.id || '',
+      nextItemId: book.chapters[index + 1]?.id || '', order: book.chapters[index].order || index + 1 };
+    return result;
+  }
+
+  async #readChapter(itemId) {
     const id = requireNumericId(itemId, '章节 ID');
-    const html = await this.#getText(`/reader/${id}`);
+    const chapter = await this.#getWebChapter(id);
+    if (!chapter.locked) return chapter;
+
+    let session;
+    try {
+      session = await this.#getSession();
+    } catch {
+      return { ...chapter, errorCode: 'ACCOUNT_STORAGE_UNAVAILABLE', retryable: true,
+        restrictionReason: '无法读取已保存的登录状态，请重试。' };
+    }
+    if (!session) {
+      return { ...chapter, loginRequired: true,
+        restrictionReason: '官网当前仅提供试读内容。已有网页阅读权限的账号可登录后重试。' };
+    }
+    try {
+      const accountChapter = await this.#getWebChapter(id, session);
+      return accountChapter.locked ? { ...accountChapter, retryable: true,
+        restrictionReason: '官网对当前扩展登录会话仍仅提供试读内容。请确认扩展登录的是具有网页阅读权限的账号。' } : accountChapter;
+    } catch (error) {
+      const loginRequired = error.code === 'HTTP_401';
+      return { ...chapter, errorCode: 'WEB_ACCOUNT_READ_FAILED', loginRequired, retryable: !loginRequired,
+        restrictionReason: loginRequired ? '网页登录状态已失效，请重新登录。'
+          : '已登录账号的网页正文读取失败，请重试或复制阅读诊断。' };
+    }
+  }
+
+  async #getWebChapter(id, session = {}) {
+    const diagnostic = { time: new Date().toISOString(), endpoint: '/reader/:itemId',
+      mode: session.cookie ? 'account' : 'guest' };
+    try {
+      const chapter = await this.#loadWebChapter(id, session);
+      diagnostic.result = chapter.locked ? 'restricted' : 'readable';
+      return chapter;
+    } catch (error) {
+      diagnostic.result = 'error';
+      diagnostic.error = error instanceof FanqieError ? error.code : 'WEB_READ_FAILED';
+      throw error;
+    } finally {
+      this.readingDiagnostics.push(diagnostic);
+      if (this.readingDiagnostics.length > 20) this.readingDiagnostics.shift();
+    }
+  }
+
+  async #loadWebChapter(id, session) {
+    const userAgent = session.userAgent || getDefaultUserAgent();
+    const html = await this.#getText(`/reader/${id}`, { ...session, userAgent });
     const state = parseInitialState(html);
     const data = state.reader?.chapterData;
-    if (!data?.itemId) {
+    if (String(data?.itemId || '') !== id) {
       throw new FanqieError('章节页中没有找到正文数据。', 'CHAPTER_NOT_FOUND');
     }
 
@@ -190,11 +289,12 @@ class FanqieClient {
     );
     let fontDataUri = '';
     const font = extractChapterFont(html);
-    if (font?.url && data.content) {
-      fontDataUri = await this.#getFontDataUri(font.url);
+    if (!locked && font?.url && data.content) {
+      fontDataUri = await this.#getFontDataUri(font.url, userAgent);
     }
 
     return {
+      source: 'web',
       id: String(data.itemId),
       bookId: String(data.bookId || ''),
       bookName: String(data.bookName || ''),
@@ -220,10 +320,16 @@ class FanqieClient {
   }
 
   async #requireSession() {
-    const cookie = await this.secretStorage.get(COOKIE_SECRET_KEY);
-    if (!cookie) {
-      throw new FanqieError('请先设置番茄小说登录 Cookie。', 'COOKIE_REQUIRED');
+    const session = await this.#getSession();
+    if (!session) {
+      throw new FanqieError('请先登录番茄小说账号。', 'COOKIE_REQUIRED');
     }
+    return session;
+  }
+
+  async #getSession() {
+    const cookie = await this.secretStorage.get(COOKIE_SECRET_KEY);
+    if (!cookie) return undefined;
     const storedUserAgent = await this.secretStorage.get(USER_AGENT_SECRET_KEY);
     return {
       cookie,
@@ -282,7 +388,7 @@ class FanqieClient {
     }
   }
 
-  async #getFontDataUri(url) {
+  async #getFontDataUri(url, userAgent = getDefaultUserAgent()) {
     if (this.fontCache.has(url)) {
       return this.fontCache.get(url);
     }
@@ -290,7 +396,8 @@ class FanqieClient {
     const timeout = setTimeout(() => controller.abort(), 20_000);
     try {
       const response = await fetch(url, {
-        headers: { Referer: `${BASE_URL}/`, 'User-Agent': getDefaultUserAgent() },
+        // Fonts may be served by a CDN. Never forward the account Cookie here.
+        headers: { Referer: `${BASE_URL}/`, 'User-Agent': userAgent },
         signal: controller.signal,
       });
       if (!response.ok) {
@@ -417,7 +524,14 @@ function parseInitialState(html) {
       depth -= 1;
       if (depth === 0) {
         try {
-          return JSON.parse(html.slice(start, index + 1));
+          // The official authenticated page serializes optional fields as the
+          // JavaScript literal undefined. Normalize only unquoted tokens; never
+          // evaluate page code or alter occurrences inside chapter text.
+          const json = html.slice(start, index + 1).replace(
+            /"(?:\\[\s\S]|[^"\\])*"|\b(undefined)\b/g,
+            (token, undefinedValue) => undefinedValue ? 'null' : token,
+          );
+          return JSON.parse(json);
         } catch {
           throw new FanqieError('页面中的初始数据无法解析。', 'INVALID_STATE');
         }

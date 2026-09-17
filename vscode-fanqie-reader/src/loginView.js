@@ -20,7 +20,10 @@ class LoginViewProvider {
     view.webview.options = { enableScripts: true };
     view.webview.html = getLoginHtml();
     view.webview.onDidReceiveMessage(async (message) => {
-      if (message.type === 'startQr') {
+      if (message.type === 'dismissLogin') {
+        this.cancel();
+        await this.callbacks.onDismiss?.();
+      } else if (message.type === 'startQr') {
         await this.startQrLogin();
       } else if (message.type === 'cancelQr') {
         this.cancelQr();
@@ -317,11 +320,13 @@ button{min-height:36px;padding:7px 10px;border:1px solid transparent;border-radi
   <div class="advanced">
     <button id="browser" class="secondary" type="button">打开官网统一认证窗口（备用）</button>
     <button id="manual" class="link" type="button">手动导入 Cookie（高级）</button>
+    <button id="dismissLogin" class="link" type="button">暂不登录</button>
   </div>
 </main>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const byId=id=>document.getElementById(id);
+byId('dismissLogin').addEventListener('click',()=>vscode.postMessage({type:'dismissLogin'}));
 const intro=byId('intro'),spinner=byId('spinner'),qrWrap=byId('qrWrap'),qr=byId('qr'),status=byId('status'),message=byId('message'),start=byId('start'),cancel=byId('cancel');
 const qrTab=byId('qrTab'),phoneTab=byId('phoneTab'),qrPanel=byId('qrPanel'),phonePanel=byId('phonePanel'),expandQr=byId('expandQr'),phone=byId('phone'),smsCode=byId('smsCode'),agreement=byId('agreement'),sendSms=byId('sendSms'),phoneLogin=byId('phoneLogin'),phoneMessage=byId('phoneMessage'),verification=byId('verification'),openVerification=byId('openVerification');
 let countdownTimer,countdownSeconds=0,qrRunning=false;

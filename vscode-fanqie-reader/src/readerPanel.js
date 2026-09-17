@@ -88,6 +88,12 @@ class ReaderPanel {
     await this.#showReaderView();
   }
 
+  async retryRestrictedChapter() {
+    if (this.view?.visible && this.currentChapter?.locked) {
+      await this.openChapter(this.currentChapter.id);
+    }
+  }
+
   async previousChapter() {
     if (!this.currentChapter) {
       await this.show();
@@ -141,6 +147,10 @@ class ReaderPanel {
   }
 
   async #handleMessage(message) {
+    if (message.type === 'login' && this.currentChapter?.loginRequired) {
+      await vscode.commands.executeCommand('fanqieReader.login');
+      return;
+    }
     if (message.type === 'retry' && this.pendingItemId) {
       await this.openChapter(this.pendingItemId);
       return;
@@ -162,6 +172,10 @@ class ReaderPanel {
   }
 
   #updateVisibilityContext() {
+    void vscode.commands.executeCommand('setContext', 'fanqieReader.hasPreviousChapter',
+      Boolean(this.view?.visible && this.currentChapter?.previousItemId));
+    void vscode.commands.executeCommand('setContext', 'fanqieReader.hasNextChapter',
+      Boolean(this.view?.visible && this.currentChapter?.nextItemId));
     void vscode.commands.executeCommand(
       'setContext',
       'fanqieReader.readerVisible',
@@ -174,7 +188,7 @@ class ReaderPanel {
     const selected = await vscode.window.showQuickPick(
       book.chapters.map((chapter) => ({
         label: chapter.title,
-        description: chapter.locked ? '需在番茄小说中解锁' : `第 ${chapter.order} 章`,
+        description: this.client.getChapterState?.(chapter.id)?.reason || '',
         itemId: chapter.id,
       })),
       {
@@ -202,7 +216,7 @@ class ReaderPanel {
   }
 
   async #saveProgress(chapter) {
-    if (!chapter.bookId) {
+    if (!chapter.bookId || chapter.locked) {
       return;
     }
     const history = this.#getHistory();
@@ -284,7 +298,7 @@ function getChapterHtml(webview, chapter, options = {}) {
     options.terminalPrompt || createTerminalPrompt(),
   );
   const content = chapter.locked
-    ? '<div class="notice">这一章需要在番茄小说中解锁后阅读。</div>'
+    ? `<div class="notice">${escapeHtml(chapter.restrictionReason || '当前网页未提供完整正文，请确认扩展登录账号具有该章节的网页阅读权限。')}${chapter.loginRequired ? ' <button data-action="login">登录后重试</button>' : chapter.retryable ? ' <button data-action="retry">重试</button>' : ''}</div>`
     : sanitizeChapterContent(chapter.content);
   const fontFace = chapter.fontDataUri
     ? `@font-face{font-family:'FanqieChapter';src:url('${chapter.fontDataUri}') format('woff2');font-weight:400;font-style:normal;font-display:block;}`
@@ -306,8 +320,8 @@ body{padding:0 12px 58px;background:var(--vscode-terminal-background,var(--vscod
 .terminal-output{max-width:var(--reader-width);font-size:var(--reader-size);line-height:var(--reader-line)}.terminal-header{position:sticky;top:0;z-index:4;padding-top:8px;background:var(--vscode-terminal-background,var(--vscode-panel-background))}.terminal-line{min-height:1em;white-space:pre-wrap;overflow-wrap:anywhere}.blank{height:calc(var(--reader-line) * 1em)}.log-info{color:var(--vscode-terminal-ansiGreen,var(--vscode-terminal-foreground));font-weight:600}.log-dim{color:var(--vscode-descriptionForeground)}
 .content{font-family:'FanqieChapter',var(--vscode-editor-font-family),Consolas,'Courier New',monospace;font-size:inherit;line-height:inherit;letter-spacing:0}.content p{margin:0 0 calc(var(--reader-line) * .72em);text-indent:0;white-space:pre-wrap;overflow-wrap:anywhere}.content p:last-child{margin-bottom:0}.notice{padding:0;color:var(--vscode-terminal-ansiYellow,var(--vscode-editorWarning-foreground));font:inherit}
 .cursor{display:inline-block;width:.58em;height:1.12em;margin-left:2px;background:currentColor;vertical-align:-.18em;animation:terminal-blink 1s steps(1,end) infinite}@keyframes terminal-blink{0%,48%{opacity:1}49%,100%{opacity:0}}
-.footer-nav{position:fixed;z-index:12;left:50%;bottom:0;display:grid;grid-template-columns:72px minmax(100px,180px) 72px;align-items:center;gap:8px;min-height:40px;padding:3px 8px;background:var(--vscode-terminal-background,var(--vscode-panel-background));border:1px solid transparent;border-bottom:0;opacity:0;transform:translateX(-50%);transition:opacity .15s ease}.footer-nav:hover,.footer-nav:focus-within{border-color:var(--vscode-panel-border,var(--vscode-widget-border));opacity:1}.footer-nav button{padding:5px 10px;border:0;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font:inherit}.footer-nav button:hover:not(:disabled){background:var(--vscode-toolbar-hoverBackground)}.chapter-index{text-align:center;color:var(--vscode-descriptionForeground);font-size:12px}
-@media(max-width:640px){body{padding:0 8px 54px}.toolbar{padding-inline:4px}.toolbar .label{display:none}.footer-nav{grid-template-columns:54px minmax(90px,1fr) 54px}}
+.footer-nav{position:fixed;z-index:12;left:50%;bottom:0;display:grid;width:min(420px,100%);grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr);align-items:center;gap:8px;min-height:40px;padding:3px 8px;background:var(--vscode-terminal-background,var(--vscode-panel-background));border:1px solid var(--vscode-panel-border,var(--vscode-widget-border));border-bottom:0;opacity:1;transform:translateX(-50%);transition:opacity .15s ease}.footer-nav:hover,.footer-nav:focus-within{border-color:var(--vscode-panel-border,var(--vscode-widget-border));opacity:1}.footer-nav button{min-width:0;white-space:nowrap;padding:5px 8px;border:1px solid var(--vscode-button-border,var(--vscode-panel-border));border-radius:4px;background:transparent;color:inherit;cursor:pointer;font:inherit}.footer-nav button:hover:not(:disabled){background:var(--vscode-toolbar-hoverBackground)}.chapter-index{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;color:var(--vscode-descriptionForeground);font-size:12px}
+@media(max-width:640px){body{padding:0 8px 54px}.toolbar{padding-inline:4px}.toolbar .label{display:none}.footer-nav{gap:4px;padding-inline:4px}}
 @media(max-height:360px){.terminal-output{line-height:1.5}.blank{height:1em}.content p{margin-bottom:.7em}}
 @media(prefers-reduced-motion:reduce){.toolbar,.footer-nav{transition:none}.cursor{animation:none;opacity:.7}}
 </style></head>
@@ -335,9 +349,9 @@ body{padding:0 12px 58px;background:var(--vscode-terminal-background,var(--vscod
   <div class="terminal-line">${terminalPrompt}<span class="cursor" aria-hidden="true"></span></div>
 </main>
 <nav class="footer-nav" aria-label="章节导航">
-  <button data-action="previous" ${previousDisabled} aria-label="上一章">←</button>
+  <button data-action="previous" ${previousDisabled} aria-label="上一章">← 上一章</button>
   <span class="chapter-index" aria-live="polite">${chapter.order ? `第 ${chapter.order} 章` : escapeHtml(chapter.title)}</span>
-  <button data-action="next" ${nextDisabled} aria-label="下一章">→</button>
+  <button data-action="next" ${nextDisabled} aria-label="下一章">下一章 →</button>
 </nav>
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();

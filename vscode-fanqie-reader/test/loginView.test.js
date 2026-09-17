@@ -74,20 +74,12 @@ test('login action opens the contributed sidebar container', async () => {
   ]);
 });
 
-test('logged-out shelf does not duplicate the visible account login view', () => {
+test('account login view appears only when explicitly requested', () => {
   const manifest = require('../package.json');
   const loginView = manifest.contributes.views.fanqieReaderSidebar.find(
     (view) => view.id === 'fanqieReader.loginView',
   );
-  const extensionSource = fs.readFileSync(
-    path.join(__dirname, '..', 'src', 'extension.js'),
-    'utf8',
-  );
-  assert.equal(loginView.when, '!fanqieReader.loggedIn');
-  assert.doesNotMatch(
-    extensionSource,
-    /登录番茄小说（验证码 \/ App 扫码）/,
-  );
+  assert.equal(loginView.when, 'fanqieReader.loginRequested');
 });
 
 test('reader and shelf actions use distinct product icons', () => {

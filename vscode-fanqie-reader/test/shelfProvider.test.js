@@ -40,6 +40,18 @@ Module._load = function patchedLoad(request, parent, isMain) {
 const { BookItem, ShelfProvider } = require('../src/extension');
 Module._load = originalLoad;
 
+test('guest shelf offers reading first and an explicit account sync action', async () => {
+  for (const hasCookie of [async () => false, async () => { throw new Error('storage unavailable'); }]) {
+    const client = { hasCookie };
+    const provider = new ShelfProvider({}, client);
+    const items = await provider.getChildren();
+    assert.deepEqual(items.map((item) => item.command?.command), [
+      'fanqieReader.open', 'fanqieReader.login',
+    ]);
+    assert.equal(items[1].label, '登录并同步书架');
+  }
+});
+
 test('shelf progressively replaces ID placeholders with cached book metadata', async () => {
   const ids = ['7636702239288986649', '7493943874184825918'];
   const state = {};
@@ -116,4 +128,32 @@ test('shelf uses persisted metadata immediately on the next load', async () => {
   assert.equal(book.label, '已缓存书名');
   assert.equal(book.description, '已缓存作者');
   assert.match(book.tooltip, /8 章/);
+});
+
+test('shelf uses actual reading state instead of a web catalog lock, and updates existing chapter nodes', async () => {
+  const chapter = { id: '123456789', title: '合成章节', locked: true };
+  const book = { id: '987654321', name: '合成书', volumes: [{ name: '默认', chapters: [chapter] }] };
+  let listener;
+  let state;
+  const client = { getBook: async () => book, getChapterState: () => state,
+    onChapterStateChanged: callback => { listener = callback; return { dispose() {} }; } };
+  const provider = new ShelfProvider({}, client);
+  const [volume] = await provider.getChildren(new BookItem(book.id));
+  const [node] = await provider.getChildren(volume);
+  assert.equal(node.description, '');
+  assert.equal(node.iconPath.id, 'file-text');
+  assert.equal(node.command.arguments[0], chapter.id);
+  const changed = [];
+  provider.events.fire = node => changed.push(node);
+  for (const [status, label, icon] of [['readable', '', 'file-text'], ['login', '需登录', 'lock'], ['error', '暂不可用', 'warning']]) {
+    state = { id: chapter.id, bookId: book.id, status };
+    listener(state);
+    assert.equal(node.description, label);
+    assert.equal(node.iconPath.id, icon);
+    assert.equal(changed.at(-1), node);
+  }
+  state = undefined;
+  listener({ bookId: book.id });
+  assert.equal(node.description, '');
+  provider.dispose();
 });
