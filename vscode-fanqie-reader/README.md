@@ -35,7 +35,7 @@
 也可使用命令行：
 
 ```powershell
-code --install-extension .\fanqie-reader-0.7.11.vsix
+code --install-extension .\fanqie-reader-0.7.12.vsix
 ```
 
 ## 使用

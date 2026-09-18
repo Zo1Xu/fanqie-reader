@@ -58,7 +58,7 @@ test('reader buttons and commands navigate across volumes using the catalog and 
   assert.equal(reader.currentChapter.nextItemId, ids[1]);
   assert.equal(contexts.get('fanqieReader.hasPreviousChapter'), false);
   assert.equal(contexts.get('fanqieReader.hasNextChapter'), true);
-  assert.match(view.webview.html, /\.footer-nav\{[^}]*opacity:1/);
+  assert.match(view.webview.html, /\.footer-nav\{[^}]*opacity:\.55/);
   await receive({ type: 'next' });
   assert.equal(reader.currentChapter.id, ids[1]);
   assert.equal(reader.currentChapter.previousItemId, ids[0]);

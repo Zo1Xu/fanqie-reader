@@ -112,7 +112,8 @@ test('chapter HTML uses terminal colors and accessible navigation', () => {
   );
   assert.match(html, /\[INFO\]<\/span> Loading project context\.\.\./);
   assert.match(html, /Dependency resolution completed\./);
-  assert.match(html, /Chapter resolved: 测试小说 \/ 第 37 章 夜色/);
+  assert.match(html, /Chapter resolved: 第 37 章 夜色 \(1,234 chars\)/);
+  assert.doesNotMatch(html, /测试小说/);
   assert.match(html, /<header class="terminal-header" aria-label="当前章节终端状态">/);
   assert.match(html, /\.terminal-header\{position:sticky;top:0;/);
   assert.match(
@@ -123,7 +124,7 @@ test('chapter HTML uses terminal colors and accessible navigation', () => {
   assert.match(html, /Alt\+PageUp/);
   assert.match(html, /第 37 章/);
   assert.match(html, /\.toolbar\{[^}]*opacity:0/);
-  assert.match(html, /\.footer-nav\{[^}]*opacity:1/);
+  assert.match(html, /\.footer-nav\{[^}]*opacity:\.55/);
   assert.match(html, /aria-label="上一章">← 上一章/);
   assert.match(html, /aria-label="下一章">下一章 →/);
   assert.doesNotMatch(html, /<h1>/);

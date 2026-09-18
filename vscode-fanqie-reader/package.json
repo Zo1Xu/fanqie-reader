@@ -2,7 +2,7 @@
   "name": "fanqie-reader",
   "displayName": "番茄阅读",
   "description": "在 VS Code 侧边栏中浏览番茄小说书架，并在底部 Panel 阅读章节。",
-  "version": "0.7.11",
+  "version": "0.7.12",
   "publisher": "Zo1Xu",
   "private": true,
   "license": "AGPL-3.0-only",
