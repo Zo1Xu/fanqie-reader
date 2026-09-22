@@ -238,6 +238,6 @@
     "selenium-webdriver": "^4.35.0"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.6.2"
+    "@vscode/vsce": "^4.0.0"
   }
 }
